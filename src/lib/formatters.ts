@@ -1,0 +1,43 @@
+export const fmt = {
+  currency: (v: number) =>
+    v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }),
+
+  cpf: (v: string) =>
+    v.replace(/\D/g, '').replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4'),
+
+  cpfMask: (v: string) =>
+    v.replace(/\D/g, '')
+     .replace(/(\d{3})(\d)/, '$1.$2')
+     .replace(/(\d{3})(\d)/, '$1.$2')
+     .replace(/(\d{3})(\d{1,2})$/, '$1-$2')
+     .slice(0, 14),
+
+  cpfPartial: (v: string) => {
+    const n = v.replace(/\D/g, '')
+    if (n.length < 11) return v
+    return `***.***.${n.slice(6, 9)}-${n.slice(9)}`
+  },
+
+  time: (v: string | Date) =>
+    new Date(v).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+
+  date: (v: string | Date) =>
+    new Date(v).toLocaleDateString('pt-BR'),
+
+  elapsed: (v: string | Date) => {
+    const diff = Math.floor((Date.now() - new Date(v).getTime()) / 60000)
+    if (diff < 1) return 'agora'
+    if (diff < 60) return `${diff}min`
+    return `${Math.floor(diff / 60)}h${(diff % 60).toString().padStart(2, '0')}min`
+  },
+
+  elapsedMin: (v: string | Date) =>
+    Math.floor((Date.now() - new Date(v).getTime()) / 60000),
+}
+
+export function isCPFValid(cpf: string): boolean {
+  const n = cpf.replace(/\D/g, '')
+  if (n.length !== 11) return false
+  if (/^(\d)\1{10}$/.test(n)) return false
+  return true
+}
