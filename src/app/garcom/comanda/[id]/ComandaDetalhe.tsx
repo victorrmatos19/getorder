@@ -162,11 +162,13 @@ export default function ComandaDetalhe({ comandaId }: { comandaId: string }) {
           </svg>
         </Link>
         <div className="flex-1 min-w-0">
-          <div className="text-xs" style={{ color: 'var(--text-mid)' }}>
-            {mesa?.nome} · {fmt.cpfPartial(comanda.cliente_cpf)}
-          </div>
+          {comanda.cliente_nome && (
+            <div className="text-xs" style={{ color: 'var(--text-mid)' }}>
+              {mesa?.nome}{comanda.cliente_cpf ? ` · ${fmt.cpfPartial(comanda.cliente_cpf)}` : ''}
+            </div>
+          )}
           <div className="serif text-lg" style={{ color: 'var(--ink)' }}>
-            {comanda.cliente_nome}
+            {comanda.cliente_nome || mesa?.nome}
           </div>
         </div>
       </header>

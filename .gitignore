@@ -7,5 +7,7 @@ node_modules
 .DS_Store
 next-env.d.ts
 
+.idea
+
 
 mocks

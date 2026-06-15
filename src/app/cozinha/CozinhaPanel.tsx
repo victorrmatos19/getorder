@@ -78,7 +78,7 @@ export default function CozinhaPanel() {
       if (it.status !== tab) continue
       const key = it.comanda_id
       const mesa = (it.comanda as any)?.mesa?.nome ?? 'Mesa'
-      const cliente = (it.comanda as any)?.cliente_nome ?? '—'
+      const cliente = (it.comanda as any)?.cliente_nome ?? ''
       const g = map.get(key)
       const min = fmt.elapsedMin(it.criado_em)
       if (g) {
@@ -196,9 +196,11 @@ export default function CozinhaPanel() {
                   <div className="text-base font-bold leading-tight" style={{ color: '#F2F0E8' }}>
                     {g.mesa}
                   </div>
-                  <div className="text-xs mt-0.5" style={{ color: 'rgba(250,249,245,0.62)' }}>
-                    {g.cliente}
-                  </div>
+                  {g.cliente && (
+                    <div className="text-xs mt-0.5" style={{ color: 'rgba(250,249,245,0.62)' }}>
+                      {g.cliente}
+                    </div>
+                  )}
                 </div>
                 <div
                   className="flex items-center gap-1 text-xs shrink-0"

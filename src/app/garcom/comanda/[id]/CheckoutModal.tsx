@@ -9,7 +9,7 @@ import type { FormaPagamento, ItemPedido, Restaurante } from '@/types'
 
 type Props = {
   comandaId: string
-  clienteNome: string
+  clienteNome: string | null
   mesaNome: string
   restauranteId: string
   itens: ItemPedido[]
@@ -136,7 +136,7 @@ export default function CheckoutModal({
             Comanda encerrada
           </div>
           <div className="text-sm mt-1" style={{ color: 'var(--text-mid)' }}>
-            {clienteNome} · {mesaNome}
+            {clienteNome ? `${clienteNome} · ` : ''}{mesaNome}
           </div>
           <div
             className="serif mono-num text-2xl my-4"
@@ -183,7 +183,7 @@ export default function CheckoutModal({
         <div className="px-6 pt-6 pb-2 flex items-center justify-between">
           <div>
             <div className="text-xs" style={{ color: 'var(--text-mid)' }}>
-              {mesaNome} · {clienteNome}
+              {mesaNome}{clienteNome ? ` · ${clienteNome}` : ''}
             </div>
             <div className="serif text-lg" style={{ color: 'var(--ink)' }}>
               Encerramento

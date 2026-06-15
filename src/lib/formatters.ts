@@ -12,7 +12,8 @@ export const fmt = {
      .replace(/(\d{3})(\d{1,2})$/, '$1-$2')
      .slice(0, 14),
 
-  cpfPartial: (v: string) => {
+  cpfPartial: (v: string | null | undefined) => {
+    if (!v) return ''
     const n = v.replace(/\D/g, '')
     if (n.length < 11) return v
     return `***.***.${n.slice(6, 9)}-${n.slice(9)}`

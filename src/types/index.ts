@@ -68,8 +68,8 @@ export type Comanda = {
   id: string
   restaurante_id: string
   mesa_id: string
-  cliente_nome: string
-  cliente_cpf: string
+  cliente_nome: string | null
+  cliente_cpf: string | null
   status: 'aberta' | 'fechada'
   forma_pagamento: FormaPagamento | null
   total: number | null

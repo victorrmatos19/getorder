@@ -139,7 +139,7 @@ export default function GarcomList() {
                         >
                           <div className="min-w-0">
                             <div className="text-sm font-bold truncate" style={{ color: 'var(--ink)' }}>
-                              {c.cliente_nome}
+                              {c.cliente_nome || 'Comanda da mesa'}
                             </div>
                             <div className="text-xs" style={{ color: 'var(--text-mid)' }}>
                               {itemsCount} {itemsCount === 1 ? 'item' : 'itens'} · aberta {fmt.time(c.criado_em)}
