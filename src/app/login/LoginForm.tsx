@@ -84,7 +84,7 @@ export default function LoginForm() {
           <Logo size="lg" />
           <div className="serif text-2xl mt-6" style={{ color: 'var(--ink)' }}>Entrar</div>
           <div className="text-sm mt-2" style={{ color: 'var(--text-mid)' }}>
-            Acesso restrito à equipe da 637.
+            Acesso restrito à equipe.
           </div>
         </div>
 
@@ -98,7 +98,7 @@ export default function LoginForm() {
               onFocus={() => setFocus('email')}
               onBlur={() => setFocus(null)}
               onChange={(e) => { setEmail(e.target.value); setErr('') }}
-              placeholder="voce@637.com.br"
+              placeholder="voce@suaempresa.com.br"
               style={inputStyle('email')}
             />
           </div>

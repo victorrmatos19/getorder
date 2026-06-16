@@ -1,7 +1,7 @@
 import Logo from '@/components/Logo'
 
 export const metadata = {
-  title: 'Política de Privacidade — 637',
+  title: 'Política de Privacidade — GetOrder',
 }
 
 export default function PrivacidadePage() {

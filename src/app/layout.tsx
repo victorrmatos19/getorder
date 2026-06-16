@@ -18,8 +18,8 @@ const sans = Work_Sans({
 })
 
 export const metadata: Metadata = {
-  title: '637 Cervejaria — Comandas',
-  description: 'Comandas digitais da 637 Cerveja Artesanal',
+  title: 'GetOrder — Comandas digitais',
+  description: 'Comandas digitais por QR Code.',
 }
 
 export const viewport: Viewport = {

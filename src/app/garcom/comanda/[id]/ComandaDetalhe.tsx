@@ -178,7 +178,7 @@ export default function ComandaDetalhe({ comandaId }: { comandaId: string }) {
           <div className="py-16 flex justify-center"><Spinner size={20} color="var(--accent)" /></div>
         )}
         {(itensQ.data ?? []).length === 0 && !itensQ.isLoading && (
-          <EmptyState icon="🍺" title="Sem pedidos ainda" />
+          <EmptyState icon="🍽️" title="Sem pedidos ainda" />
         )}
 
         {rounds.map((r, idx) => (

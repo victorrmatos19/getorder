@@ -31,7 +31,7 @@ export default function SuperAdminHome() {
     <>
       <StaffHeader
         title="Super Admin"
-        subtitle="637 SaaS"
+        subtitle="GetOrder SaaS"
         rightSlot={
           <Link
             href="/super-admin/restaurantes/novo"

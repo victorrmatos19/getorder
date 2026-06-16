@@ -151,7 +151,7 @@ export default function CardapioView({ mesa, comandaId, onReset }: Props) {
       if (error) throw error
       setCart({})
       setModal(false)
-      setToast({ visible: true, message: 'Pedido enviado! 🍻' })
+      setToast({ visible: true, message: 'Pedido enviado!' })
       qc.invalidateQueries({ queryKey: ['itens', 'comanda', comandaId] })
     } catch (e: any) {
       setToast({ visible: true, message: e.message || 'Erro ao enviar pedido.' })
@@ -483,7 +483,7 @@ function MinhaComanda({
         )}
         {!loading && !error && itens.length === 0 && (
           <EmptyState
-            icon="🍺"
+            icon="🍽️"
             title="Sua comanda está vazia"
             description="Faça seu primeiro pedido pelo cardápio."
           />

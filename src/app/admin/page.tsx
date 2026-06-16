@@ -101,7 +101,7 @@ export default function AdminDashboardPage() {
 
   return (
     <>
-      <StaffHeader title="Painel" subtitle={`637 · ${new Date().toLocaleDateString('pt-BR')}`} />
+      <StaffHeader title="Painel" subtitle={`GetOrder · ${new Date().toLocaleDateString('pt-BR')}`} />
 
       <div className="flex-1 overflow-y-auto px-6 py-4">
         {isLoading && <div className="py-16 flex justify-center"><Spinner color="var(--accent)" /></div>}

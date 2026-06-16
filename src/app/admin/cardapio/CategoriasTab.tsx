@@ -221,7 +221,7 @@ function CategoriaForm({
             <input
               value={emoji}
               onChange={(e) => setEmoji(e.target.value)}
-              placeholder="🍺"
+              placeholder="🍽️"
               className="w-full py-3 text-2xl text-center"
               style={{ border: 'none', borderBottom: '1px solid var(--line)', background: 'transparent' }}
             />
@@ -231,7 +231,7 @@ function CategoriaForm({
             <input
               value={nome}
               onChange={(e) => setNome(e.target.value)}
-              placeholder="Cervejas"
+              placeholder="Bebidas"
               className="w-full py-3 text-base"
               style={{
                 border: 'none', borderBottom: '1px solid var(--line)',

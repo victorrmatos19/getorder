@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { QRCodeSVG } from 'qrcode.react'
 import { createClient } from '@/lib/supabase/client'
 import Spinner from '@/components/Spinner'
 import { fmt } from '@/lib/formatters'
@@ -24,8 +23,6 @@ const METHODS: { id: FormaPagamento; label: string; emoji: string }[] = [
   { id: 'pix',      label: 'PIX',      emoji: '📱' },
   { id: 'dinheiro', label: 'Dinheiro', emoji: '💵' },
 ]
-
-const PIX_KEY = 'contato@637.com.br'
 
 export default function CheckoutModal({
   comandaId, clienteNome, mesaNome, restauranteId, itens, subtotal, onClose, onSuccess,
@@ -378,35 +375,6 @@ export default function CheckoutModal({
             })}
           </div>
         </div>
-
-        {method === 'pix' && (
-          <div className="px-6 mb-5 animate-slide-up">
-            <div
-              className="rounded-xl p-4 flex gap-4 items-center"
-              style={{ border: '1px solid var(--line)' }}
-            >
-              <div style={{ background: '#FAF9F5', padding: 4, borderRadius: 8 }}>
-                <QRCodeSVG value={`PIX:${PIX_KEY}:${total.toFixed(2)}`} size={88} />
-              </div>
-              <div className="min-w-0">
-                <div className="text-xs" style={{ color: 'var(--text-mid)' }}>Chave PIX</div>
-                <div className="text-sm font-bold truncate" style={{ color: 'var(--ink)' }}>
-                  {PIX_KEY}
-                </div>
-                <div
-                  className="text-xs mt-2 flex items-center gap-1.5"
-                  style={{ color: 'var(--text-mid)' }}
-                >
-                  <span
-                    className="w-1.5 h-1.5 rounded-full animate-pulse-soft"
-                    style={{ background: 'var(--status-ready)' }}
-                  />
-                  Aguardando pagamento
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
 
         {method === 'dinheiro' && (
           <div className="px-6 mb-5 animate-slide-up">

@@ -81,7 +81,7 @@ export default function GarcomList() {
           />
         )}
         {!isLoading && !isError && byMesa.length === 0 && (
-          <EmptyState icon="🍻" title="Nenhuma mesa ocupada" description="Aguardando clientes." />
+          <EmptyState icon="🍽️" title="Nenhuma mesa ocupada" description="Aguardando clientes." />
         )}
 
         <div className="flex flex-col gap-3">

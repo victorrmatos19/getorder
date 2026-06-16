@@ -124,7 +124,7 @@ export default function CozinhaPanel() {
     <div className="min-h-screen flex flex-col" style={{ background: 'var(--primary-dk)', color: '#F2F0E8' }}>
       <StaffHeader
         variant="dark"
-        subtitle="Cozinha · 637"
+        subtitle="Cozinha · GetOrder"
         title={horarioStr}
       />
 

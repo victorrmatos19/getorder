@@ -62,7 +62,7 @@ export async function POST(req: Request) {
   // 3) Categorias padrão (opcional)
   if (body.categorias_padrao !== false) {
     await admin.from('categorias').insert([
-      { restaurante_id: rest.id, nome: 'Cervejas', emoji: '🍺', ordem: 1 },
+      { restaurante_id: rest.id, nome: 'Destaques', emoji: '⭐', ordem: 1 },
       { restaurante_id: rest.id, nome: 'Lanches',  emoji: '🍔', ordem: 2 },
       { restaurante_id: rest.id, nome: 'Drinks',   emoji: '🥤', ordem: 3 },
       { restaurante_id: rest.id, nome: 'Petiscos', emoji: '🍟', ordem: 4 },
