@@ -12,7 +12,7 @@ export function useItensComanda(comandaId: string | undefined) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('itens_pedido')
-        .select('*, produto:produtos(*)')
+        .select('*, produto:produtos(*), adicionais:itens_pedido_adicionais(*)')
         .eq('comanda_id', comandaId!)
         .order('criado_em', { ascending: true })
       if (error) throw error
@@ -28,7 +28,7 @@ export function useItensCozinha() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('itens_pedido')
-        .select('*, produto:produtos(*), comanda:comandas(*, mesa:mesas(*))')
+        .select('*, produto:produtos(*), comanda:comandas(*, mesa:mesas(*)), adicionais:itens_pedido_adicionais(*)')
         .in('status', ['novo', 'em_preparo', 'pronto'])
         .order('criado_em', { ascending: true })
       if (error) throw error

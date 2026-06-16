@@ -11,6 +11,7 @@ import StatusBadge from '@/components/StatusBadge'
 import Toast from '@/components/Toast'
 import CheckoutModal from './CheckoutModal'
 import { fmt } from '@/lib/formatters'
+import { subtotalItem, totalComanda } from '@/lib/calcComanda'
 import { useComanda } from '@/lib/hooks/useComanda'
 import { useItensComanda } from '@/lib/hooks/useItens'
 import type { ItemPedido } from '@/types'
@@ -45,12 +46,7 @@ export default function ComandaDetalhe({ comandaId }: { comandaId: string }) {
     }
   }, [comandaId, qc])
 
-  const subtotal = useMemo(
-    () => (itensQ.data ?? [])
-      .filter((it) => it.status !== 'cancelado')
-      .reduce((s, it) => s + (it.produto?.preco ?? 0) * it.quantidade, 0),
-    [itensQ.data],
-  )
+  const subtotal = useMemo(() => totalComanda(itensQ.data ?? []), [itensQ.data])
 
   const cancelarItem = async (id: string) => {
     try {
@@ -216,6 +212,20 @@ export default function ComandaDetalhe({ comandaId }: { comandaId: string }) {
                       {it.produto?.nome ?? '—'}{' '}
                       <span style={{ color: 'var(--text-mid)' }}>× {it.quantidade}</span>
                     </div>
+                    {(it.adicionais ?? []).length > 0 && (
+                      <div className="mt-0.5 flex flex-col gap-0.5">
+                        {(it.adicionais ?? []).map((a) => (
+                          <div key={a.id} className="text-xs flex items-center gap-1" style={{ color: 'var(--text-mid)' }}>
+                            <span>+ {a.nome_snapshot}</span>
+                            {a.preco_snapshot > 0 && (
+                              <span className="mono-num" style={{ color: 'var(--accent)' }}>
+                                ({fmt.currency(a.preco_snapshot)})
+                              </span>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
                     {it.obs && (
                       <div
                         className="text-xs italic mt-0.5"
@@ -266,7 +276,7 @@ export default function ComandaDetalhe({ comandaId }: { comandaId: string }) {
                         textDecoration: canceled ? 'line-through' : 'none',
                       }}
                     >
-                      {fmt.currency((it.produto?.preco ?? 0) * it.quantidade)}
+                      {fmt.currency(subtotalItem(it))}
                     </div>
                     {isPronto && !isFechada && (
                       <button

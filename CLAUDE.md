@@ -217,7 +217,7 @@ itens_pedido (
   comanda_id uuid FK,
   produto_id uuid FK,
   quantidade integer,
-  observacao text,
+  obs text,
   status text CHECK ('novo','em_preparo','pronto','entregue','cancelado'),
   cancelado_em timestamptz,
   cancelado_por uuid references auth.users(id),
@@ -357,7 +357,7 @@ exibidas normalmente.
 7. Realtime ativo
 ```
 
-**⚠️ Observações em destaque:** na cozinha, o campo `observacao` deve ser exibido em peso 700, cor --accent. Operador NÃO pode perder isso.
+**⚠️ Observações em destaque:** na cozinha, o campo `obs` (e os adicionais escolhidos) deve ser exibido em peso 700, cor --accent. Operador NÃO pode perder isso.
 
 ### 3. Garçom (/garcom)
 

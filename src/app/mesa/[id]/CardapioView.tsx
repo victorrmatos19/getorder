@@ -9,7 +9,11 @@ import EmptyState from '@/components/EmptyState'
 import Spinner from '@/components/Spinner'
 import Toast from '@/components/Toast'
 import StatusBadge from '@/components/StatusBadge'
+import ProdutoDetalhe from './ProdutoDetalhe'
 import { fmt } from '@/lib/formatters'
+import { subtotalItem, totalComanda, subtotalCartLine, totalCart } from '@/lib/calcComanda'
+import type { CartLine } from '@/lib/calcComanda'
+import { criarItemPedido } from '@/lib/itensPedido'
 import { useProdutos } from '@/lib/hooks/useProdutos'
 import { useCategorias } from '@/lib/hooks/useCategorias'
 import { useItensComanda } from '@/lib/hooks/useItens'
@@ -18,9 +22,6 @@ import type { Categoria, ItemPedido, Mesa, Produto } from '@/types'
 
 type Tab = 'cardapio' | 'comanda'
 type SectionKey = 'novidades' | 'ofertas' | string
-
-type CartItem = { qty: number; obs: string }
-type Cart = Record<string, CartItem>
 
 type Props = {
   mesa: Mesa
@@ -32,13 +33,14 @@ export default function CardapioView({ mesa, comandaId, onReset }: Props) {
   const qc = useQueryClient()
   const [tab, setTab] = useState<Tab>('cardapio')
   const [section, setSection] = useState<SectionKey | null>(null)
-  const [cart, setCart] = useState<Cart>({})
+  const [cart, setCart] = useState<CartLine[]>([])
   const [modal, setModal] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [toast, setToast] = useState<{ visible: boolean; message: string }>({
     visible: false, message: '',
   })
   const [clienteNome, setClienteNome] = useState<string>('')
+  const [detalhe, setDetalhe] = useState<Produto | null>(null)
 
   const produtosQ      = useProdutos(mesa.restaurante_id, { soDisponiveis: true })
   const categoriasQ    = useCategorias(mesa.restaurante_id, { soAtivas: true })
@@ -108,55 +110,44 @@ export default function CardapioView({ mesa, comandaId, onReset }: Props) {
     [sections, section],
   )
 
-  const priceOf = (p: Produto) =>
-    p.em_oferta && p.oferta_preco != null ? p.oferta_preco : p.preco
+  const cartCount = cart.reduce((a, l) => a + l.quantidade, 0)
+  const cartTotal = useMemo(() => totalCart(cart), [cart])
 
-  const cartCount = Object.values(cart).reduce((a, b) => a + b.qty, 0)
-  const cartTotal = useMemo(() => {
-    return Object.entries(cart).reduce((s, [id, c]) => {
-      const p = produtos.find((x) => x.id === id)
-      return s + (p ? priceOf(p) * c.qty : 0)
-    }, 0)
-  }, [cart, produtos])
+  const addToCart = (line: CartLine) => setCart((c) => [...c, line])
+  const removeFromCart = (key: string) => setCart((c) => c.filter((l) => l.key !== key))
 
-  const setQty = (produtoId: string, qty: number) => {
-    setCart((prev) => {
-      const nx = { ...prev }
-      if (qty <= 0) delete nx[produtoId]
-      else nx[produtoId] = { qty, obs: prev[produtoId]?.obs ?? '' }
-      return nx
-    })
-  }
-  const setObs = (produtoId: string, obs: string) => {
-    setCart((prev) => {
-      if (!prev[produtoId]) return prev
-      return { ...prev, [produtoId]: { ...prev[produtoId], obs } }
-    })
-  }
-
-  const confirmarPedido = async () => {
-    if (cartCount === 0) return
+  const enviarPedido = async () => {
+    if (cart.length === 0 || !podeReceber) return
     setSubmitting(true)
-    try {
-      const supabase = createClient()
-      const rows = Object.entries(cart).map(([produto_id, c]) => ({
-        comanda_id: comandaId,
-        restaurante_id: mesa.restaurante_id,
-        produto_id,
-        quantidade: c.qty,
-        obs: c.obs.trim() || null,
-        status: 'novo' as const,
-      }))
-      const { error } = await supabase.from('itens_pedido').insert(rows)
-      if (error) throw error
-      setCart({})
+    // Envia uma linha por vez via RPC (valida + snapshot no servidor).
+    // Falha parcial: remove as que entraram, para na que falhou e mantém o resto.
+    const enviadas: string[] = []
+    let erro: string | null = null
+    for (const l of cart) {
+      try {
+        await criarItemPedido({
+          comandaId,
+          produtoId: l.produto.id,
+          quantidade: l.quantidade,
+          observacao: l.observacao,
+          adicionalIds: l.adicionais.map((a) => a.id),
+        })
+        enviadas.push(l.key)
+      } catch (e: any) {
+        erro = e.message || 'Erro ao enviar o pedido.'
+        break
+      }
+    }
+    setSubmitting(false)
+    qc.invalidateQueries({ queryKey: ['itens', 'comanda', comandaId] })
+
+    if (erro) {
+      setCart((c) => c.filter((l) => !enviadas.includes(l.key)))
+      setToast({ visible: true, message: erro })
+    } else {
+      setCart([])
       setModal(false)
       setToast({ visible: true, message: 'Pedido enviado!' })
-      qc.invalidateQueries({ queryKey: ['itens', 'comanda', comandaId] })
-    } catch (e: any) {
-      setToast({ visible: true, message: e.message || 'Erro ao enviar pedido.' })
-    } finally {
-      setSubmitting(false)
     }
   }
 
@@ -306,16 +297,13 @@ export default function CardapioView({ mesa, comandaId, onReset }: Props) {
               <ProductCard
                 key={p.id}
                 produto={p}
-                quantidade={cart[p.id]?.qty ?? 0}
-                obs={cart[p.id]?.obs ?? ''}
-                onChangeQuantidade={(n) => setQty(p.id, n)}
-                onChangeObs={(s) => setObs(p.id, s)}
                 isLast={i === arr.length - 1}
+                onOpen={() => setDetalhe(p)}
               />
             ))}
           </div>
 
-          {cartCount > 0 && podeReceber && (
+          {cart.length > 0 && (
             <div
               className="absolute bottom-0 left-0 right-0 px-6 pt-3 pb-4 animate-slide-up safe-bottom"
               style={{ background: 'var(--bg)', borderTop: '1px solid var(--line)' }}
@@ -352,7 +340,7 @@ export default function CardapioView({ mesa, comandaId, onReset }: Props) {
         />
       )}
 
-      {modal && (
+      {modal && cart.length > 0 && (
         <div
           className="fixed inset-0 z-50 flex items-end"
           style={{ background: 'rgba(0,0,0,0.4)' }}
@@ -363,36 +351,45 @@ export default function CardapioView({ mesa, comandaId, onReset }: Props) {
             className="w-full px-6 pt-6 pb-8 animate-slide-up safe-bottom max-h-[85vh] overflow-y-auto"
             style={{ background: 'var(--bg)', borderRadius: '20px 20px 0 0' }}
           >
-            <div className="serif text-xl mb-5" style={{ color: 'var(--ink)' }}>Confirmar pedido</div>
+            <div className="serif text-xl mb-5" style={{ color: 'var(--ink)' }}>Seu pedido</div>
             <div className="mb-5">
-              {Object.entries(cart).map(([id, c], i, arr) => {
-                const p = (produtosQ.data ?? []).find((x) => x.id === id)
-                if (!p) return null
-                return (
-                  <div
-                    key={id}
-                    className="py-3 text-sm"
-                    style={{ borderBottom: i < arr.length - 1 ? '1px solid var(--line)' : 'none' }}
-                  >
-                    <div className="flex justify-between">
+              {cart.map((l, i, arr) => (
+                <div
+                  key={l.key}
+                  className="py-3 text-sm flex items-start gap-3"
+                  style={{ borderBottom: i < arr.length - 1 ? '1px solid var(--line)' : 'none' }}
+                >
+                  <div className="flex-1 min-w-0">
+                    <div className="flex justify-between gap-2">
                       <span style={{ color: 'var(--ink)' }}>
-                        {p.nome} <span style={{ color: 'var(--text-mid)' }}>× {c.qty}</span>
+                        {l.produto.nome} <span style={{ color: 'var(--text-mid)' }}>× {l.quantidade}</span>
                       </span>
-                      <span className="mono-num font-bold" style={{ color: 'var(--ink)' }}>
-                        {fmt.currency(priceOf(p) * c.qty)}
+                      <span className="mono-num font-bold shrink-0" style={{ color: 'var(--ink)' }}>
+                        {fmt.currency(subtotalCartLine(l))}
                       </span>
                     </div>
-                    {c.obs && (
-                      <div
-                        className="text-xs italic mt-1"
-                        style={{ color: 'var(--text-mid)' }}
-                      >
-                        ↳ {c.obs}
+                    {l.adicionais.map((a) => (
+                      <div key={a.id} className="text-xs mt-0.5 flex items-center gap-1" style={{ color: 'var(--text-mid)' }}>
+                        <span>+ {a.nome}</span>
+                        {a.preco > 0 && (
+                          <span className="mono-num" style={{ color: 'var(--accent)' }}>({fmt.currency(a.preco)})</span>
+                        )}
                       </div>
+                    ))}
+                    {l.observacao && (
+                      <div className="text-xs italic mt-0.5" style={{ color: 'var(--text-mid)' }}>↳ {l.observacao}</div>
                     )}
                   </div>
-                )
-              })}
+                  <button
+                    onClick={() => removeFromCart(l.key)}
+                    aria-label="Remover item"
+                    className="shrink-0 w-8 h-8 rounded-lg flex items-center justify-center"
+                    style={{ border: '1px solid var(--line)', color: 'var(--accent)' }}
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M6 6l12 12M18 6L6 18" /></svg>
+                  </button>
+                </div>
+              ))}
             </div>
             <div
               className="flex justify-between items-baseline pt-3 mb-6"
@@ -406,6 +403,11 @@ export default function CardapioView({ mesa, comandaId, onReset }: Props) {
                 {fmt.currency(cartTotal)}
               </span>
             </div>
+            {!podeReceber && (
+              <div className="text-xs mb-3 text-center" style={{ color: 'var(--accent)' }}>
+                Pedidos indisponíveis no momento (pausa ou fora de horário).
+              </div>
+            )}
             <div className="flex gap-2">
               <button
                 onClick={() => setModal(false)}
@@ -421,22 +423,35 @@ export default function CardapioView({ mesa, comandaId, onReset }: Props) {
                 Voltar
               </button>
               <button
-                onClick={confirmarPedido}
-                disabled={submitting}
+                onClick={enviarPedido}
+                disabled={submitting || !podeReceber}
                 className="rounded-xl text-sm font-bold flex items-center justify-center gap-2"
                 style={{
                   flex: 2,
                   minHeight: 48,
-                  background: 'var(--accent)',
-                  color: '#FAF9F5',
+                  background: submitting || !podeReceber ? 'var(--line)' : 'var(--accent)',
+                  color: submitting || !podeReceber ? 'var(--muted)' : '#FAF9F5',
                   border: 'none',
+                  cursor: submitting || !podeReceber ? 'not-allowed' : 'pointer',
                 }}
               >
-                {submitting ? <><Spinner /> Enviando</> : 'Confirmar'}
+                {submitting ? <><Spinner /> Enviando</> : 'Enviar pedido'}
               </button>
             </div>
           </div>
         </div>
+      )}
+
+      {detalhe && (
+        <ProdutoDetalhe
+          produto={detalhe}
+          bloqueado={!podeReceber}
+          onClose={() => setDetalhe(null)}
+          onAddToCart={(line) => {
+            addToCart(line)
+            setToast({ visible: true, message: 'Adicionado ao pedido' })
+          }}
+        />
       )}
 
       <Toast
@@ -460,9 +475,7 @@ function MinhaComanda({
 }) {
   const [confirmingId, setConfirmingId] = useState<string | null>(null)
   const rounds = useMemo(() => groupRounds(itens), [itens])
-  const subtotal = itens
-    .filter((it) => it.status !== 'cancelado')
-    .reduce((s, it) => s + (it.produto?.preco ?? 0) * it.quantidade, 0)
+  const subtotal = totalComanda(itens)
 
   return (
     <>
@@ -526,6 +539,20 @@ function MinhaComanda({
                       {item.produto?.nome ?? '—'}{' '}
                       <span style={{ color: 'var(--text-mid)' }}>× {item.quantidade}</span>
                     </div>
+                    {(item.adicionais ?? []).length > 0 && (
+                      <div className="mt-0.5 flex flex-col gap-0.5">
+                        {(item.adicionais ?? []).map((a) => (
+                          <div key={a.id} className="text-xs flex items-center gap-1" style={{ color: 'var(--text-mid)' }}>
+                            <span>+ {a.nome_snapshot}</span>
+                            {a.preco_snapshot > 0 && (
+                              <span className="mono-num" style={{ color: 'var(--accent)' }}>
+                                ({fmt.currency(a.preco_snapshot)})
+                              </span>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
                     {item.obs && (
                       <div
                         className="text-xs italic mt-0.5"
@@ -576,7 +603,7 @@ function MinhaComanda({
                         textDecoration: canceled ? 'line-through' : 'none',
                       }}
                     >
-                      {fmt.currency((item.produto?.preco ?? 0) * item.quantidade)}
+                      {fmt.currency(subtotalItem(item))}
                     </div>
                     {canCancel && !confirming && (
                       <button

@@ -11,6 +11,20 @@ import { useItensCozinha } from '@/lib/hooks/useItens'
 import { fmt } from '@/lib/formatters'
 import type { ItemPedido, ItemStatus } from '@/types'
 
+// Agrupa os adicionais do item por grupo (grupo_nome_snapshot), preservando a
+// ordem, em UPPER CASE — para a cozinha não perder ponto da carne nem "sem X".
+function agruparAdicionais(it: ItemPedido): { grupo: string | null; nomes: string[] }[] {
+  const grupos: { grupo: string | null; nomes: string[] }[] = []
+  for (const a of it.adicionais ?? []) {
+    const grupo = a.grupo_nome_snapshot ? a.grupo_nome_snapshot.toUpperCase() : null
+    const nome = a.nome_snapshot.toUpperCase()
+    const last = grupos[grupos.length - 1]
+    if (last && last.grupo === grupo) last.nomes.push(nome)
+    else grupos.push({ grupo, nomes: [nome] })
+  }
+  return grupos
+}
+
 type Tab = 'novo' | 'em_preparo' | 'pronto'
 
 const TABS: { key: Tab; label: string; color: string }[] = [
@@ -224,6 +238,20 @@ export default function CozinhaPanel() {
                 {g.itens.map((it) => (
                   <div key={it.id} className="text-sm py-1.5" style={{ color: '#F2F0E8' }}>
                     {it.produto?.nome ?? '—'} <span className="opacity-60">× {it.quantidade}</span>
+                    {agruparAdicionais(it).map((gr, idx) => (
+                      <div
+                        key={idx}
+                        className="text-sm font-bold mt-1 px-2 py-1 rounded uppercase"
+                        style={{
+                          color: '#E08A74',
+                          background: 'rgba(224,138,116,0.08)',
+                          borderLeft: '3px solid #E08A74',
+                          letterSpacing: '0.02em',
+                        }}
+                      >
+                        {gr.grupo ? `${gr.grupo}: ` : '› '}{gr.nomes.join(', ')}
+                      </div>
+                    ))}
                     {it.obs && (
                       <div
                         className="text-sm font-bold mt-1 px-2 py-1 rounded"

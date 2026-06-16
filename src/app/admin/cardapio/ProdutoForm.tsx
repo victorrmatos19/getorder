@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/client'
 import Spinner from '@/components/Spinner'
 import { useRestaurante } from '@/lib/contexts/RestauranteContext'
 import { uid } from '@/lib/uid'
+import ProdutoGruposSection from './ProdutoGruposSection'
 import type { Categoria, Produto } from '@/types'
 
 type Props = {
@@ -296,6 +297,8 @@ export default function ProdutoForm({ initial, defaultCategoriaId, categorias, o
           />
           <span style={{ color: 'var(--ink)' }}>Disponível para venda</span>
         </label>
+
+        <ProdutoGruposSection produtoId={initial?.id} restauranteId={restauranteId} />
 
         {err && (
           <div className="mt-4 text-xs" style={{ color: 'var(--accent)' }}>{err}</div>

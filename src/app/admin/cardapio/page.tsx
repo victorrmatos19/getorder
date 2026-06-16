@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import Link from 'next/link'
 import StaffHeader from '@/components/StaffHeader'
 import ProdutosTab from './ProdutosTab'
 import CategoriasTab from './CategoriasTab'
@@ -38,6 +39,16 @@ export default function CardapioAdminPage() {
             </button>
           )
         })}
+        <Link
+          href="/admin/cardapio/adicionais"
+          className="py-3 text-sm ml-auto flex items-center gap-1"
+          style={{ color: 'var(--muted)', borderBottom: '2px solid transparent', marginBottom: -1 }}
+        >
+          Adicionais
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+            <path d="M5 12h14M13 6l6 6-6 6" />
+          </svg>
+        </Link>
       </div>
 
       {tab === 'produtos' ? <ProdutosTab /> : <CategoriasTab />}

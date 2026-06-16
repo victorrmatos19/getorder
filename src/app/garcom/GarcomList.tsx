@@ -8,6 +8,7 @@ import StaffHeader from '@/components/StaffHeader'
 import EmptyState from '@/components/EmptyState'
 import Spinner from '@/components/Spinner'
 import { fmt } from '@/lib/formatters'
+import { totalComanda } from '@/lib/calcComanda'
 import type { Comanda, ItemPedido, Mesa } from '@/types'
 
 type ItemWithPreco = ItemPedido & { produto?: { preco: number } }
@@ -20,7 +21,7 @@ function useGarcomData() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('comandas')
-        .select('*, mesa:mesas(*), itens:itens_pedido(*, produto:produtos(preco))')
+        .select('*, mesa:mesas(*), itens:itens_pedido(*, produto:produtos(preco), adicionais:itens_pedido_adicionais(*))')
         .eq('status', 'aberta')
         .order('criado_em')
       if (error) throw error
@@ -125,10 +126,7 @@ export default function GarcomList() {
 
                 <ul>
                   {comandas.map((c) => {
-                    const total = c.itens.reduce(
-                      (s, i) => s + i.quantidade * (i.produto?.preco ?? 0),
-                      0,
-                    )
+                    const total = totalComanda(c.itens)
                     const itemsCount = c.itens.reduce((s, i) => s + i.quantidade, 0)
                     return (
                       <li key={c.id}>

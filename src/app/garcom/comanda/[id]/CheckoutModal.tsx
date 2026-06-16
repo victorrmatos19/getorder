@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import Spinner from '@/components/Spinner'
 import { fmt } from '@/lib/formatters'
+import { subtotalItem } from '@/lib/calcComanda'
 import type { FormaPagamento, ItemPedido, Restaurante } from '@/types'
 
 type Props = {
@@ -61,20 +62,11 @@ export default function CheckoutModal({
   const troco = method === 'dinheiro' ? Math.max(0, recebidoNum - total) : 0
   const podeConfirmar = !!method && !busy && (method !== 'dinheiro' || recebidoNum >= total)
 
-  const resumoItens = useMemo(() => {
-    const map = new Map<string, { nome: string; qtd: number; subtotal: number; obs: string[] }>()
-    for (const it of itens) {
-      if (it.status === 'cancelado') continue
-      const nome = it.produto?.nome ?? '—'
-      const preco = it.produto?.preco ?? 0
-      const prev = map.get(nome) ?? { nome, qtd: 0, subtotal: 0, obs: [] }
-      prev.qtd += it.quantidade
-      prev.subtotal += preco * it.quantidade
-      if (it.obs) prev.obs.push(it.obs)
-      map.set(nome, prev)
-    }
-    return Array.from(map.values())
-  }, [itens])
+  // Itens ativos, sem merge — cada item carrega seus próprios adicionais.
+  const itensAtivos = useMemo(
+    () => itens.filter((it) => it.status !== 'cancelado'),
+    [itens],
+  )
 
   const confirmar = async () => {
     if (!method) return
@@ -226,15 +218,23 @@ export default function CheckoutModal({
           >
             Resumo
           </div>
-          {resumoItens.map((r) => (
-            <div key={r.nome} className="py-1.5 text-sm">
+          {itensAtivos.map((it) => (
+            <div key={it.id} className="py-1.5 text-sm">
               <div className="flex justify-between">
-                <span style={{ color: 'var(--text-mid)' }}>{r.nome} × {r.qtd}</span>
-                <span className="mono-num" style={{ color: 'var(--ink)' }}>{fmt.currency(r.subtotal)}</span>
+                <span style={{ color: 'var(--text-mid)' }}>{it.produto?.nome ?? '—'} × {it.quantidade}</span>
+                <span className="mono-num" style={{ color: 'var(--ink)' }}>{fmt.currency(subtotalItem(it))}</span>
               </div>
-              {r.obs.length > 0 && (
+              {(it.adicionais ?? []).map((a) => (
+                <div key={a.id} className="text-xs mt-0.5 flex items-center gap-1" style={{ color: 'var(--text-mid)' }}>
+                  <span>+ {a.nome_snapshot}</span>
+                  {a.preco_snapshot > 0 && (
+                    <span className="mono-num" style={{ color: 'var(--accent)' }}>({fmt.currency(a.preco_snapshot)})</span>
+                  )}
+                </div>
+              ))}
+              {it.obs && (
                 <div className="text-xs italic mt-0.5" style={{ color: 'var(--text-mid)' }}>
-                  ↳ {r.obs.join(' · ')}
+                  ↳ {it.obs}
                 </div>
               )}
             </div>
