@@ -68,8 +68,23 @@ button { -webkit-tap-highlight-color: transparent; }
   .print-area {
     position: absolute;
     inset: 0;
+    margin: 0 !important;
+    padding: 24px !important;
+    max-width: none !important;
+    border-radius: 0 !important;
+    background: #fff !important;
     display: flex;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
+    gap: 16px;
+  }
+  .print-area .qr-box {
+    border: none !important;
+    margin: 0 !important;
+  }
+  .print-area svg {
+    width: min(70vw, 70vh) !important;
+    height: min(70vw, 70vh) !important;
   }
 }

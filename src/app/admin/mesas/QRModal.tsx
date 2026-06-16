@@ -25,16 +25,16 @@ export default function QRModal({ mesa, onClose }: { mesa: Mesa; onClose: () => 
         style={{ background: 'var(--bg)' }}
       >
         <div className="serif text-xl mb-1" style={{ color: 'var(--ink)' }}>{mesa.nome}</div>
-        <div className="text-xs mb-4" style={{ color: 'var(--text-mid)' }}>
-          637 cervejaria · Escaneie para abrir comanda
+        <div className="text-xs mb-4 print:hidden" style={{ color: 'var(--text-mid)' }}>
+          Escaneie para abrir sua comanda
         </div>
         <div
-          className="mx-auto mb-4 inline-block p-4 rounded-xl"
+          className="qr-box mx-auto mb-4 inline-block p-4 rounded-xl"
           style={{ background: '#FFFFFF', border: '1px solid var(--line)' }}
         >
           {url && <QRCodeSVG value={url} size={240} />}
         </div>
-        <div className="text-xs break-all" style={{ color: 'var(--text-mid)' }}>{url}</div>
+        <div className="text-xs break-all print:hidden" style={{ color: 'var(--text-mid)' }}>{url}</div>
         <div className="flex gap-2 mt-6 print:hidden">
           <button
             onClick={onClose}
