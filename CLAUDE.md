@@ -9,7 +9,7 @@
 
 **GetOrder** é um SaaS multi-tenant de comandas digitais via QR Code para bares, cervejarias artesanais, restaurantes e arenas esportivas (beach tennis, padel, society) no Brasil.
 
-**Proposta de valor:** cliente final escaneia QR Code da mesa/quadra, se identifica, faz pedidos pelo próprio celular (sem app), cozinha recebe em tempo real, garçom é liberado do papel de anotador.
+**Proposta de valor:** cliente final escaneia QR Code da mesa, faz pedidos pelo próprio celular (sem app, sem cadastro), cozinha recebe em tempo real, garçom é liberado do papel de anotador.
 
 **Posicionamento comercial:**
 - R$ 199/mês, sem fidelidade, sem taxa por pedido
