@@ -31,6 +31,7 @@
 | Estado server | TanStack Query (@tanstack/react-query) |
 | Hospedagem frontend | Vercel (free tier) |
 | Hospedagem backend | Supabase Pro ($25/mês) |
+| Dev local | Supabase CLI + Docker (`npm run db:start`) — ver "Ambiente de desenvolvimento local" |
 | QR Code | qrcode.react |
 | Gráficos | recharts |
 | Fontes | Cormorant Garamond + Work Sans (via next/font/google) |
@@ -525,19 +526,62 @@ exibidas normalmente.
 
 ### Variáveis de ambiente
 
-`.env.local` (desenvolvimento) e Vercel Environment Variables (produção):
+Três vars (usadas em `lib/supabase/client.ts`, `server.ts` e `admin.ts`):
 
 ```
-NEXT_PUBLIC_SUPABASE_URL=https://xxxxx.supabase.co
+NEXT_PUBLIC_SUPABASE_URL=...
 NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJ...
+SUPABASE_SERVICE_ROLE_KEY=eyJ...        # só server-side (rota super-admin)
 ```
 
-⚠️ **NUNCA** commitar `.env.local`. Sempre usar `NEXT_PUBLIC_` no prefix das vars que vão pro client.
+- **`.env.local`** = ambiente **ativo** do `next dev`. Por padrão aponta para o **Supabase local**
+  (Docker). Backup das credenciais de PRODUÇÃO em **`.env.prd.local`**.
+- Trocar local↔PRD: `cp .env.prd.local .env.local` (e reiniciar o `next dev`).
+- Vercel (produção) usa suas próprias Environment Variables — não lê `.env.local`.
+
+⚠️ **NUNCA** commitar `.env*.local` (gitignored). Sempre usar `NEXT_PUBLIC_` no prefix das vars que vão pro client.
 ⚠️ **NUNCA** usar `SUPABASE_SERVICE_ROLE_KEY` no frontend. Bypassa RLS.
 
 ### Supabase Auth Configuration
 - Site URL: `https://getorder.com.br` (ou domínio Vercel)
 - Redirect URLs: `https://getorder.com.br/**` e `https://*.vercel.app/**`
+
+### Ambiente de desenvolvimento local (Supabase CLI + Docker)
+
+O stack inteiro (Postgres + Auth + Storage + Studio) roda em Docker via Supabase CLI
+(instalada como devDependency; rodar com `npx supabase`). **Use o local para desenvolver e
+pare de alterar o PRD.**
+
+```bash
+npm run db:start     # sobe o stack local (Docker)
+npm run dev          # app contra o banco LOCAL
+npm run db:stop      # desliga o stack
+npm run db:reset     # recria o banco do baseline + recarrega seed.sql (zera mudanças locais)
+npm run db:status    # mostra URLs e chaves locais
+```
+
+- **Studio (ver/editar dados):** http://127.0.0.1:54323 · **API:** http://127.0.0.1:54321 ·
+  **Mailpit (e-mails de teste):** http://127.0.0.1:54324
+- **Login local:** mesmos e-mail/senha do PRD (os usuários foram replicados no seed).
+- As **fotos de produto não carregam** local (só os registros de Storage vieram, não os arquivos).
+
+**Schema & migrations (importante):**
+- As migrations 001–007 (aplicadas no PRD na mão) foram **squashadas** num único baseline:
+  `supabase/migrations/00000000000000_baseline.sql` = **dump do schema do PRD** (fonte da verdade).
+  As antigas viraram histórico em `supabase/migrations_archive/` (fora do caminho de `db reset`).
+- `supabase/seed.sql` = dump dos **dados do PRD** (public + auth). **Gitignored** (dados reais +
+  hashes). Para recriá-lo: `npx supabase db dump --linked --data-only -f supabase/seed.sql`.
+
+**Fluxo novo de mudança de banco (fim do "SQL na mão em produção"):**
+```bash
+npx supabase migration new minha_mudanca   # cria SQL em supabase/migrations/
+npm run db:reset                            # testa local
+npm run db:push                             # aplica no PRD (supabase db push)
+```
+> ⚠️ **Antes do 1º `db push`:** reconciliar o histórico do PRD uma única vez com
+> `npx supabase migration repair --status applied 00000000000000` (marca o baseline como já
+> aplicado no PRD — é só metadado, não recria schema). Sem isso, o push tenta reaplicar o
+> baseline e falha.
 
 ---
 

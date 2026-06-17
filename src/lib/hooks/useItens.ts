@@ -28,11 +28,11 @@ export function useItensCozinha() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('itens_pedido')
-        .select('*, produto:produtos(*), comanda:comandas(*, mesa:mesas(*)), adicionais:itens_pedido_adicionais(*)')
+        .select('id, comanda_id, produto_id, quantidade, obs, status, criado_em, produto:produtos(nome), comanda:comandas(cliente_nome, mesa:mesas(nome)), adicionais:itens_pedido_adicionais(*)')
         .in('status', ['novo', 'em_preparo', 'pronto'])
         .order('criado_em', { ascending: true })
       if (error) throw error
-      return (data ?? []) as ItemPedido[]
+      return (data ?? []) as unknown as ItemPedido[]
     },
   })
 }

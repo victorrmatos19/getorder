@@ -21,7 +21,7 @@ function useGarcomData() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('comandas')
-        .select('*, mesa:mesas(*), itens:itens_pedido(*, produto:produtos(preco), adicionais:itens_pedido_adicionais(*))')
+        .select('id, mesa_id, cliente_nome, criado_em, mesa:mesas(id, nome), itens:itens_pedido(id, status, quantidade, preco_base_snapshot, produto:produtos(preco), adicionais:itens_pedido_adicionais(preco_snapshot))')
         .eq('status', 'aberta')
         .order('criado_em')
       if (error) throw error

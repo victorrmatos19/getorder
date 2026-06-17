@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { memo, useEffect, useMemo, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { createClient } from '@/lib/supabase/client'
 import StaffHeader from '@/components/StaffHeader'
@@ -45,20 +45,28 @@ const NEXT_LABEL: Record<Tab, string> = {
   pronto: 'Confirmar Entrega',
 }
 
+// Relógio isolado: só ele re-renderiza a cada 1s (o grid de cards não).
+const Relogio = memo(function Relogio() {
+  const [hora, setHora] = useState(() =>
+    new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+  )
+  useEffect(() => {
+    const t = setInterval(
+      () => setHora(new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })),
+      1000,
+    )
+    return () => clearInterval(t)
+  }, [])
+  return <>{hora}</>
+})
+
 export default function CozinhaPanel() {
   const qc = useQueryClient()
   const [tab, setTab] = useState<Tab>('novo')
-  const [now, setNow] = useState(() => new Date())
   const [toast, setToast] = useState({ visible: false, message: '' })
   const [busyId, setBusyId] = useState<string | null>(null)
 
   const { data: itens = [], isLoading, isError, error, refetch } = useItensCozinha()
-
-  // Relógio
-  useEffect(() => {
-    const t = setInterval(() => setNow(new Date()), 1000)
-    return () => clearInterval(t)
-  }, [])
 
   // Realtime
   useEffect(() => {
@@ -131,7 +139,6 @@ export default function CozinhaPanel() {
     }
   }
 
-  const horarioStr = now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
   const tabCfg = TABS.find((x) => x.key === tab)!
 
   return (
@@ -139,7 +146,7 @@ export default function CozinhaPanel() {
       <StaffHeader
         variant="dark"
         subtitle="Cozinha · GetOrder"
-        title={horarioStr}
+        title={<Relogio />}
       />
 
       {/* Tabs */}

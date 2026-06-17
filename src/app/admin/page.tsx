@@ -1,8 +1,8 @@
 'use client'
 
 import { useMemo } from 'react'
+import dynamic from 'next/dynamic'
 import { useQuery } from '@tanstack/react-query'
-import { BarChart, Bar, ResponsiveContainer, XAxis, Cell, LabelList } from 'recharts'
 import { createClient } from '@/lib/supabase/client'
 import StaffHeader from '@/components/StaffHeader'
 import Spinner from '@/components/Spinner'
@@ -15,6 +15,12 @@ type RecentItem = ItemPedido & {
   produto?: { nome: string; preco: number }
   comanda?: Comanda & { mesa?: { nome: string } }
 }
+
+// Gráfico (recharts) carregado sob demanda — fora do bundle inicial do /admin.
+const VendasPorHoraChart = dynamic(() => import('./VendasPorHoraChart'), {
+  ssr: false,
+  loading: () => <div style={{ height: 140 }} />,
+})
 
 function useDashboardData() {
   const supabase = createClient()
@@ -142,24 +148,7 @@ export default function AdminDashboardPage() {
                 <div className="text-sm font-bold" style={{ color: 'var(--ink)' }}>Vendas por hora</div>
                 <div className="text-xs" style={{ color: 'var(--text-mid)' }}>últimas 8h</div>
               </div>
-              <div style={{ width: '100%', height: 140 }}>
-                <ResponsiveContainer>
-                  <BarChart data={stats.hours} margin={{ top: 12, right: 0, left: 0, bottom: 0 }}>
-                    <XAxis dataKey="h" tickLine={false} axisLine={false} tick={{ fontSize: 11, fill: 'var(--text-mid)' }} />
-                    <Bar dataKey="v" radius={[4, 4, 0, 0]}>
-                      {stats.hours.map((_, i) => (
-                        <Cell key={i} fill={i === stats.hours.length - 1 ? 'var(--accent)' : 'var(--primary)'} />
-                      ))}
-                      <LabelList
-                        dataKey="v"
-                        position="top"
-                        formatter={(v: number) => (v > 0 ? Math.round(v) : '')}
-                        style={{ fontSize: 10, fill: 'var(--text-mid)' }}
-                      />
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
+              <VendasPorHoraChart hours={stats.hours} />
             </div>
 
             <div

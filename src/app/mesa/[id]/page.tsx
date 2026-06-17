@@ -24,39 +24,34 @@ export default function MesaPage() {
     let active = true
 
     const init = async () => {
-      // 1. Carrega e valida a mesa
-      const { data: mesaData } = await supabase
-        .from('mesas')
-        .select('*')
-        .eq('id', mesaId)
-        .maybeSingle()
+      // 1+2 em paralelo: mesa e comanda aberta só dependem do mesaId (da URL).
+      const [mesaRes, comandaRes] = await Promise.all([
+        supabase.from('mesas').select('*').eq('id', mesaId).maybeSingle(),
+        supabase
+          .from('comandas')
+          .select('id')
+          .eq('mesa_id', mesaId)
+          .eq('status', 'aberta')
+          .order('criado_em', { ascending: false })
+          .limit(1)
+          .maybeSingle(),
+      ])
 
       if (!active) return
 
+      const mesaData = mesaRes.data
       if (!mesaData || !mesaData.ativo) {
         setStatus('no-mesa')
         return
       }
       setMesa(mesaData as Mesa)
 
-      // 2. Busca a comanda aberta da mesa (modelo: uma comanda compartilhada por mesa)
-      const { data: existente, error: findErr } = await supabase
-        .from('comandas')
-        .select('id')
-        .eq('mesa_id', mesaId)
-        .eq('status', 'aberta')
-        .order('criado_em', { ascending: false })
-        .limit(1)
-        .maybeSingle()
-
-      if (!active) return
-      if (findErr) {
+      if (comandaRes.error) {
         setStatus('error')
         return
       }
-
-      if (existente) {
-        setComandaId(existente.id)
+      if (comandaRes.data) {
+        setComandaId(comandaRes.data.id)
         setStatus('ready')
         return
       }

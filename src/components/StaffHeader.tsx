@@ -7,7 +7,7 @@ import Logo from './Logo'
 
 type Props = {
   subtitle?: string
-  title: string
+  title: React.ReactNode
   variant?: 'light' | 'dark'
   rightSlot?: React.ReactNode
   leftSlot?: React.ReactNode
