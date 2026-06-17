@@ -9,6 +9,7 @@ import Spinner from '@/components/Spinner'
 import EmptyState from '@/components/EmptyState'
 import StatusBadge from '@/components/StatusBadge'
 import { fmt } from '@/lib/formatters'
+import { useRestaurante } from '@/lib/contexts/RestauranteContext'
 import type { Comanda, ItemPedido } from '@/types'
 
 type RecentItem = ItemPedido & {
@@ -22,18 +23,20 @@ const VendasPorHoraChart = dynamic(() => import('./VendasPorHoraChart'), {
   loading: () => <div style={{ height: 140 }} />,
 })
 
-function useDashboardData() {
+function useDashboardData(restauranteId: string | null | undefined) {
   const supabase = createClient()
   return useQuery({
-    queryKey: ['admin-dashboard'],
+    queryKey: ['admin-dashboard', restauranteId],
+    enabled: !!restauranteId,
     queryFn: async () => {
       const start = new Date()
       start.setHours(0, 0, 0, 0)
 
-      // Comandas fechadas hoje
+      // Comandas fechadas hoje (filtro explícito por tenant — defesa em profundidade além da RLS)
       const { data: fechadas, error: e1 } = await supabase
         .from('comandas')
         .select('id, total, fechado_em, mesa:mesas(nome)')
+        .eq('restaurante_id', restauranteId!)
         .eq('status', 'fechada')
         .gte('fechado_em', start.toISOString())
       if (e1) throw e1
@@ -42,6 +45,7 @@ function useDashboardData() {
       const { data: itensHoje, error: e2 } = await supabase
         .from('itens_pedido')
         .select('id, quantidade, comanda_id, produto:produtos(nome, preco), comanda:comandas(mesa_id, mesa:mesas(nome), status), criado_em')
+        .eq('restaurante_id', restauranteId!)
         .gte('criado_em', start.toISOString())
       if (e2) throw e2
 
@@ -49,6 +53,7 @@ function useDashboardData() {
       const { data: recent, error: e3 } = await supabase
         .from('itens_pedido')
         .select('*, produto:produtos(nome, preco), comanda:comandas(*, mesa:mesas(nome))')
+        .eq('restaurante_id', restauranteId!)
         .order('criado_em', { ascending: false })
         .limit(10)
       if (e3) throw e3
@@ -64,7 +69,8 @@ function useDashboardData() {
 }
 
 export default function AdminDashboardPage() {
-  const { data, isLoading, isError, error, refetch } = useDashboardData()
+  const { restauranteId } = useRestaurante()
+  const { data, isLoading, isError, error, refetch } = useDashboardData(restauranteId)
 
   const stats = useMemo(() => {
     if (!data) return null
