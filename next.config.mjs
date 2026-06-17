@@ -6,6 +6,8 @@ const nextConfig = {
     formats: ['image/avif', 'image/webp'],
     remotePatterns: [
       { protocol: 'https', hostname: '*.supabase.co', pathname: '/storage/v1/object/public/**' },
+      // Supabase local (Docker) — fotos do cardápio em dev; inofensivo em produção
+      { protocol: 'http', hostname: '127.0.0.1', port: '54321', pathname: '/storage/v1/object/public/**' },
     ],
   },
 }

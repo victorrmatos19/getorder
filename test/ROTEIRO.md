@@ -237,6 +237,47 @@ Os valores em R$ dependem do seed (podem mudar). Asserte comportamento:
 
 ---
 
+## Suite 16 — Onboarding de restaurante NOVO (isolamento multi-tenant ponta-a-ponta) · [A]/[D]
+**Objetivo:** validar que um restaurante **recém-criado** consegue cadastrar tudo e atender o
+cliente — sem ver/gravar dados de outro tenant. Cobre a classe de bugs "só aparece no 2º restaurante"
+(escrita barrada por RLS, leitura cruzada, "Mesa indisponível", upload de foto, save de configs).
+
+> **Pré-condições extras:** após o `db:reset`, defina também a senha do super-admin localmente para
+> poder criar o restaurante pela UI:
+> `docker exec supabase_db_getorder psql -U postgres -d postgres -c "update auth.users set encrypted_password = crypt('teste1234', gen_salt('bf')) where email='victor.rodrigues.dmatos@gmail.com';"`
+
+**Passos**
+1. **Super-admin cria o restaurante novo** (`/super-admin/restaurantes/novo`): nome `Vyna Gelatos`,
+   email `vyna@admin.com`, senha `teste1234` (≥8). Slug auto = `vyna-gelatos`. → "Restaurante criado".
+   *(usa `service_role`; o trigger `force_tenant_on_write` **pula** — categorias padrão **e
+   horários padrão (7 dias abertos)** são criados, então o restaurante já nasce "aberto".)*
+2. **Logout** e **login limpo** como `vyna@admin.com`/`teste1234` → cai em `/admin`.
+3. **Categoria** (`/admin/cardapio` → Categorias → `+ Nova`): criar `🍨 Sorvetes` → "Categoria salva".
+4. **Produto + FOTO** (Produtos → `+ Novo`): nome, preço, categoria `Sorvetes`, **escolher uma foto**
+   → Salvar. **Esperado:** `POST /storage/v1/object/produtos/... → 200` **e** `POST /rest/v1/produtos
+   → 201`. *(Sem a policy de storage e o `descricao` correto, falhava — ver Anexo D.)*
+5. **Adicional** (`/admin/cardapio/adicionais` → `+ Novo grupo`): grupo `Cobertura` (Múltipla) +
+   opção `Granulado` `R$ 2,00` → "Grupo salvo".
+6. **Mesa + QR** (`/admin/mesas` → `+ Nova`): `Mesa 10` → "Mesa salva"; abrir **QR** → a URL contém
+   `/mesa/<uuid>`. Anote esse `mesa_id`.
+7. **Configurações** (`/admin/configuracoes` → Geral): alterar **taxa** (ou marcar "Obrigatória") e
+   **Salvar**. **[D] Esperado:** o valor **persiste** no banco
+   (`select taxa_servico_percentual, taxa_servico_obrigatoria from restaurantes where slug='vyna-gelatos';`).
+   *(Antes da migration 011 o PATCH dava 204 mas gravava 0 linhas — ver Anexo D.)*
+   - **Horário:** o restaurante já vem com 7 dias abertos (criados no passo 1). Para testar o
+     fechamento, marque um dia como **Fechado** e confira que o cliente vê "Fora do horário".
+8. **CLIENTE em janela ANÔNIMA/DESLOGADA** (ver gotcha ⚠️ no Anexo D): abrir `/mesa/<mesa_id do Vyna>`.
+   **Esperado:** cardápio **carrega** (NÃO "Mesa indisponível"), a **foto do produto aparece**,
+   abre o produto, **Adicionar ao pedido** → **Enviar pedido** → **[D]** uma `comanda` (status
+   `aberta`, `restaurante_id` do Vyna) com o item é criada.
+9. **Isolamento:** logado como `vyna@admin` o cardápio/dashboard mostram **só** dados do Vyna; e o
+   admin do 637 **não** vê comandas/itens do Vyna (vendas escopadas por tenant).
+
+**Esperado (resumo):** todo o cadastro grava no tenant novo; cliente anônimo pede normalmente;
+nenhuma leitura/escrita cruza tenants.
+
+---
+
 ## Anexo A — Mapa de rotas
 | Rota | Acesso | Função |
 |---|---|---|
@@ -265,3 +306,37 @@ Os valores em R$ dependem do seed (podem mudar). Asserte comportamento:
 ## Anexo C — Como registrar resultados
 Para cada suite: **PASS/FAIL**, evidência (screenshot/snapshot), e **logs de console** (erros/warnings).
 Em FAIL, anotar rota, passo, esperado × obtido e qualquer erro de console/rede.
+
+## Anexo D — Gotchas de QA e modelo de segurança multi-tenant
+
+**Gotchas de automação (descobertos dirigindo o app):**
+- ⚠️ **Teste o cliente DESLOGADO.** O cliente real é anônimo. Se você abrir `/mesa/<id>` no mesmo
+  navegador logado em **outro** restaurante, as **vendas** (comanda) são escopadas por tenant e o
+  fluxo de pedido falha — o **cardápio** carrega (é público), mas para um teste fiel use janela
+  anônima / limpe os cookies (`document.cookie` + `localStorage.clear()`).
+- ⚠️ **Não rode `npm run build` com o `next dev` no ar.** Os dois compartilham `.next` e corrompem
+  o cache (`Error: Cannot find module './vendor-chunks/@tanstack.js'`, página em branco). Pare o
+  preview antes do build; se acontecer: `preview_stop` → `rm -rf .next` → `preview_start`.
+- **Inputs controlados do React:** setar `input.value` por JS **não** atualiza o estado do React
+  (o save manda o valor antigo). Para alternar config, prefira **checkbox via `.click()`** (evento
+  nativo) ou digitação real; não confie em `value=...` + `dispatchEvent`.
+- **Foto local:** o `next.config.mjs` precisa do host do Supabase local
+  (`http://127.0.0.1:54321/storage/v1/object/public/**`) senão o `next/image` quebra o cardápio em dev.
+
+**Modelo de segurança (migrations 008–011) — o que cada teste protege:**
+- **Cardápio = público; Vendas = escopadas.** SELECT `using (true)` em `produtos, categorias, mesas,
+  restaurantes, horarios_funcionamento, grupos_adicionais, adicionais, produtos_grupos` (cardápio
+  do cliente, anônimo ou logado em qualquer tenant). SELECT **escopado por tenant** em `comandas,
+  itens_pedido, itens_pedido_adicionais` (não vaza vendas entre restaurantes). → Suites 8/9/16.
+- **Escrita carimba o tenant no servidor** (`force_tenant_on_write`, 009): em INSERT/UPDATE de
+  `produtos/categorias/mesas/grupos_adicionais/adicionais/produtos_grupos/horarios`, o
+  `restaurante_id` é forçado ao do usuário logado → admin nunca grava em outro tenant nem leva
+  "violates row-level security" por id errado. → Suite 16 passos 3–6.
+- **Configurações:** admin atualiza **só o próprio** `restaurantes` (011); `slug`/`ativo` ficam
+  protegidos (domínio do super-admin). → Suite 16 passo 7.
+- **Upload de foto:** policies do bucket `produtos` (010) permitem leitura pública + escrita
+  autenticada. → Suite 16 passo 4.
+
+> Verificação rápida no banco (psql) — simular um usuário e conferir a RLS:
+> `begin; set local role authenticated; set local request.jwt.claims='{"sub":"<uid>"}'; <query>; rollback;`
+> (cliente anônimo: `set local role anon`).

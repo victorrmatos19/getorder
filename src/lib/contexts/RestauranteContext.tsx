@@ -1,6 +1,7 @@
 'use client'
 
-import { createContext, useContext, useEffect, useMemo, useState } from 'react'
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { createClient } from '@/lib/supabase/client'
 import type { Restaurante, Role } from '@/types'
 
@@ -23,6 +24,7 @@ const RestauranteContext = createContext<ContextValue>({
 })
 
 export function RestauranteProvider({ children }: { children: React.ReactNode }) {
+  const queryClient = useQueryClient()
   const [state, setState] = useState<Omit<ContextValue, 'isSuperAdmin'>>({
     restauranteId: null,
     restaurante: null,
@@ -31,12 +33,23 @@ export function RestauranteProvider({ children }: { children: React.ReactNode })
     loading: true,
   })
 
+  // Guarda o usuário resolvido por último; ao trocar de usuário (login/logout/refresh com sub
+  // diferente) limpamos o cache de queries do tenant antigo.
+  const lastUserId = useRef<string | null>(null)
+
   useEffect(() => {
     const supabase = createClient()
     let active = true
 
     const load = async () => {
       const { data: { user } } = await supabase.auth.getUser()
+
+      // Troca de usuário (inclui logout): descarta listas em cache do tenant anterior.
+      if (lastUserId.current !== null && lastUserId.current !== (user?.id ?? null)) {
+        queryClient.clear()
+      }
+      lastUserId.current = user?.id ?? null
+
       if (!user) {
         if (active) setState({ restauranteId: null, restaurante: null, role: null, email: null, loading: false })
         return
@@ -68,8 +81,20 @@ export function RestauranteProvider({ children }: { children: React.ReactNode })
     }
 
     load()
-    return () => { active = false }
-  }, [])
+
+    // Re-resolve o tenant quando a sessão muda (login, logout, refresh de token com outro usuário),
+    // evitando restauranteId preso de uma sessão anterior enquanto o /admin segue montado.
+    const { data: sub } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'SIGNED_IN' || event === 'SIGNED_OUT' || event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') {
+        load()
+      }
+    })
+
+    return () => {
+      active = false
+      sub.subscription.unsubscribe()
+    }
+  }, [queryClient])
 
   const value = useMemo<ContextValue>(
     () => ({ ...state, isSuperAdmin: state.role === 'super_admin' }),

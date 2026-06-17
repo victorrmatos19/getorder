@@ -302,26 +302,50 @@ bloqueia pedido em pausa/fora de horário). Wrapper tipado em `lib/itensPedido.t
 ```sql
 auth_restaurante_id()  -- retorna restaurante_id do usuário logado
 is_super_admin()       -- retorna true se role = 'super_admin'
+current_role()         -- retorna o role (perfis.role) do usuário logado
 ```
 
-**Policies principais:**
-- `tenant_isolation`: usuário só vê dados do próprio restaurante (super_admin vê tudo) —
-  aplicada também em `grupos_adicionais`, `adicionais`, `produtos_grupos`, `itens_pedido_adicionais`
-- `public_read_produtos`: leitura pública de produtos disponíveis (rota /mesa)
-- `public_read_categorias`: idem categorias
-- `public_read_mesas`: idem mesas ativas
-- `public_read_grupos` / `public_read_adicionais` / `public_read_produtos_grupos` / `public_read_ipa`:
-  leitura pública das opções e do snapshot (cliente renderiza/visualiza os adicionais)
-- `public_insert_comandas`: clientes anônimos podem inserir comandas
-- `public_insert_itens`: idem itens_pedido
-- `public_read_comandas` / `public_read_itens`: leitura para acompanhamento da comanda do cliente
-- ⚠️ **Sem** insert público em `itens_pedido_adicionais`: a escrita acontece **só** pela RPC acima
+**Modelo de leitura (migrations 008–011) — CARDÁPIO público, VENDAS escopadas:**
+
+O `/mesa/[id]` é **público por design** e precisa funcionar para **qualquer** visitante
+(anônimo OU autenticado em outro tenant). Por isso o SELECT é dividido:
+
+- **Cardápio/display = leitura pública `using (true)`** (migration 008): `produtos`, `categorias`,
+  `mesas`, `restaurantes`, `horarios_funcionamento`, `grupos_adicionais`, `adicionais`,
+  `produtos_grupos`. Dados não sensíveis (já públicos no QR). Policies `<tabela>_select_public`.
+  > ⚠️ Não voltar a escopar essas leituras por tenant — quebra o cliente logado em outro
+  > restaurante ("Mesa indisponível"). O isolamento das telas admin vem do filtro explícito
+  > `.eq('restaurante_id', …)` nas queries, não da RLS de leitura.
+- **Vendas = leitura ESCOPADA por tenant** (migration 008): `comandas`, `itens_pedido`,
+  `itens_pedido_adicionais`. Policy `<tabela>_select_scoped`:
+  `auth.uid() is null OR is_super_admin() OR restaurante_id = auth_restaurante_id()`
+  (cliente anônimo lê a própria comanda; staff só o próprio restaurante → dashboard/garçom/cozinha
+  não vazam vendas entre tenants).
+
+**Escrita (servidor é a fonte da verdade):**
+- `tenant_isolation` / `<tabela>_admin_write`: escrita restrita ao próprio restaurante (super_admin
+  vê tudo). Aplicada em `produtos`, `categorias`, `mesas`, `grupos_adicionais`, `adicionais`,
+  `produtos_grupos`, `itens_pedido_adicionais` etc.
+- **Trigger `force_tenant_on_write` (migration 009):** em INSERT/UPDATE dessas tabelas, para um
+  autenticado não-super-admin, **carimba `restaurante_id := auth_restaurante_id()`** (ignora o que
+  o client mandou). Service-role (`auth.uid()` nulo) e super_admin passam. → impossível gravar em
+  outro tenant ou levar "violates row-level security" por id errado.
+- **`restaurantes` (migration 011):** super_admin tem `restaurantes_super_admin_write` (ALL); o
+  admin do restaurante tem `restaurantes_admin_update` (atualiza **só o próprio** — configs de
+  taxa/pausa). Trigger `protect_restaurante_super_fields` impede o admin de mudar `slug`/`ativo`.
+- `public_insert_comandas` / `public_insert_itens`: clientes anônimos inserem comandas/itens.
+- ⚠️ **Sem** insert público em `itens_pedido_adicionais`: a escrita acontece **só** pela RPC acima.
+
+**Storage (migration 010):** bucket público `produtos` com policies em `storage.objects`
+(`produtos_public_read` + escrita autenticada). As policies de storage agora são **versionadas**
+(antes só existiam no painel do PRD → upload de foto falhava no ambiente local).
 
 ⚠️ **CRÍTICO:** Toda nova tabela com dados de restaurante DEVE incluir:
 1. Coluna `restaurante_id uuid NOT NULL REFERENCES restaurantes(id)`
 2. Índice em `restaurante_id`
 3. `ENABLE ROW LEVEL SECURITY`
-4. Policy `tenant_isolation` usando as funções helper
+4. Policy de escrita por tenant + (se for tabela de **venda**) SELECT escopado; se for **cardápio**,
+   SELECT público. Considerar o trigger `force_tenant_on_write` para carimbar o `restaurante_id`.
 
 ### Realtime
 

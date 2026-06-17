@@ -89,7 +89,8 @@ export default function ProdutoForm({ initial, defaultCategoriaId, categorias, o
       const cat = categorias.find((c) => c.id === categoriaId)
       const payload = {
         nome: nome.trim(),
-        descricao: descricao.trim() || null,
+        // descricao é NOT NULL DEFAULT '' no banco — enviar '' (não null) quando vazia
+        descricao: descricao.trim(),
         preco: precoNum,
         categoria_id: categoriaId,
         // mantém coluna legada coerente com o nome em minúsculas (compat com /mesa antigo se houver)

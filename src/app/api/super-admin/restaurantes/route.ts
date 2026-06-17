@@ -69,6 +69,19 @@ export async function POST(req: Request) {
     ])
   }
 
+  // 3b) Horários de funcionamento padrão (7 dias abertos) — sem isso o cliente vê
+  // "Fora do horário de funcionamento" e não consegue pedir (useDisponibilidade trata
+  // dia sem horário como fechado). O admin refina em /admin/configuracoes → Horário.
+  await admin.from('horarios_funcionamento').insert(
+    Array.from({ length: 7 }, (_, dia) => ({
+      restaurante_id: rest.id,
+      dia_semana: dia,
+      abre: '00:00',
+      fecha: '23:59',
+      fechado: false,
+    })),
+  )
+
   // 4) Criar usuário admin
   const { data: created, error: e2 } = await admin.auth.admin.createUser({
     email: body.admin_email.trim(),
