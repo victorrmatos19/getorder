@@ -49,6 +49,7 @@ src/
 │   │   └── comanda/[id]/
 │   ├── admin/                  ← protegida (admin)
 │   │   ├── cardapio/
+│   │   │   └── adicionais/      ← CRUD de grupos de adicionais
 │   │   ├── mesas/
 │   │   └── configuracoes/
 │   ├── super-admin/            ← protegida (super_admin)
@@ -56,8 +57,7 @@ src/
 ├── components/
 │   ├── Logo.tsx
 │   ├── PageHeader.tsx
-│   ├── ProductCard.tsx
-│   ├── ProductStepper.tsx
+│   ├── ProductCard.tsx         ← card "tap-to-open" do cardápio
 │   ├── StatusBadge.tsx
 │   ├── EmptyState.tsx
 │   ├── ProtectedRoute.tsx
@@ -74,7 +74,12 @@ src/
 │   │   ├── useProdutos.ts
 │   │   ├── useItens.ts
 │   │   ├── useMesas.ts
+│   │   ├── useAdicionais.ts        ← grupos + opções (admin)
+│   │   ├── useProdutoGrupos.ts     ← vínculos produto↔grupo (admin)
+│   │   ├── useProdutoOpcoes.ts     ← opções de um produto (cliente)
 │   │   └── useRestaurante.ts
+│   ├── calcComanda.ts          ← subtotalItem / totalComanda (fonte única de total)
+│   ├── itensPedido.ts          ← wrapper da RPC criar_item_pedido
 │   └── formatters.ts
 ├── types/
 │   └── index.ts
@@ -219,11 +224,75 @@ itens_pedido (
   quantidade integer,
   obs text,
   status text CHECK ('novo','em_preparo','pronto','entregue','cancelado'),
+  preco_base_snapshot numeric(10,2),   -- snapshot do preço base no momento do pedido
   cancelado_em timestamptz,
   cancelado_por uuid references auth.users(id),
   criado_em timestamptz
 )
+
+-- ── Adicionais estruturados (grupos reutilizáveis entre produtos) ──
+grupos_adicionais (
+  id uuid PK,
+  restaurante_id uuid FK,
+  nome text,                          -- ex: "Ponto da carne", "Adicionais", "Tirar"
+  selecao text CHECK ('unica','multipla'),
+  obrigatorio boolean DEFAULT false,
+  min_escolhas int DEFAULT 0,
+  max_escolhas int,                   -- null = sem teto
+  ativo boolean DEFAULT true,
+  criado_em timestamptz
+)
+
+adicionais (                          -- opções dentro de um grupo
+  id uuid PK,
+  restaurante_id uuid FK,
+  grupo_id uuid FK references grupos_adicionais(id) on delete cascade,
+  nome text,
+  preco numeric(10,2) DEFAULT 0,      -- 0 = remoção ("sem cebola")
+  disponivel boolean DEFAULT true,
+  ordem int DEFAULT 0,
+  criado_em timestamptz
+)
+
+produtos_grupos (                     -- junção: quais grupos se aplicam a quais produtos
+  id uuid PK,
+  restaurante_id uuid FK,
+  produto_id uuid FK on delete cascade,
+  grupo_id uuid FK on delete cascade,
+  ordem int DEFAULT 0,
+  UNIQUE(produto_id, grupo_id)
+)
+
+itens_pedido_adicionais (             -- snapshot imutável dos adicionais escolhidos
+  id uuid PK,
+  restaurante_id uuid FK,
+  item_pedido_id uuid FK on delete cascade,
+  adicional_id uuid FK on delete set null,   -- null se a opção original foi removida
+  grupo_nome_snapshot text,
+  nome_snapshot text,
+  preco_snapshot numeric(10,2) DEFAULT 0,
+  criado_em timestamptz
+)
 ```
+
+### RPC `criar_item_pedido` (criação de item — fluxo do cliente)
+
+⚠️ **O cliente NUNCA insere direto em `itens_pedido`.** Todo item criado pelo fluxo
+de `/mesa/[id]` passa pela função `criar_item_pedido(p_comanda_id, p_produto_id,
+p_quantidade, p_observacao, p_adicional_ids[])` (`SECURITY DEFINER`). Ela:
+- resolve o `restaurante_id` a partir da comanda e valida comanda aberta + produto disponível;
+- **anti-tampering**: cada `adicional_id` precisa pertencer a um grupo **ativo** vinculado ao
+  produto, do mesmo restaurante, e estar disponível;
+- valida as regras de cada grupo (obrigatório / min / max / única);
+- insere o item com `preco_base_snapshot = produtos.preco` e grava o **snapshot** de cada
+  adicional (`nome_snapshot`, `preco_snapshot`, `grupo_nome_snapshot`) lendo o preço **real**
+  do banco — o frontend só envia os **IDs**, nunca preço.
+
+O gatilho `itens_pedido_horario_guard` continua valendo (a RPC roda como anônimo no JWT, então
+bloqueia pedido em pausa/fora de horário). Wrapper tipado em `lib/itensPedido.ts`.
+
+> ⚠️ Limitação conhecida: a RPC faz snapshot de `produtos.preco`, **ignorando** `em_oferta`/
+> `oferta_preco`. Ofertas hoje são só display no card; não incidem no pedido.
 
 ### RLS — Row Level Security
 
@@ -235,13 +304,17 @@ is_super_admin()       -- retorna true se role = 'super_admin'
 ```
 
 **Policies principais:**
-- `tenant_isolation`: usuário só vê dados do próprio restaurante (super_admin vê tudo)
+- `tenant_isolation`: usuário só vê dados do próprio restaurante (super_admin vê tudo) —
+  aplicada também em `grupos_adicionais`, `adicionais`, `produtos_grupos`, `itens_pedido_adicionais`
 - `public_read_produtos`: leitura pública de produtos disponíveis (rota /mesa)
 - `public_read_categorias`: idem categorias
 - `public_read_mesas`: idem mesas ativas
+- `public_read_grupos` / `public_read_adicionais` / `public_read_produtos_grupos` / `public_read_ipa`:
+  leitura pública das opções e do snapshot (cliente renderiza/visualiza os adicionais)
 - `public_insert_comandas`: clientes anônimos podem inserir comandas
 - `public_insert_itens`: idem itens_pedido
 - `public_read_comandas` / `public_read_itens`: leitura para acompanhamento da comanda do cliente
+- ⚠️ **Sem** insert público em `itens_pedido_adicionais`: a escrita acontece **só** pela RPC acima
 
 ⚠️ **CRÍTICO:** Toda nova tabela com dados de restaurante DEVE incluir:
 1. Coluna `restaurante_id uuid NOT NULL REFERENCES restaurantes(id)`
@@ -315,11 +388,22 @@ useEffect(() => {
    - Verifica horarios_funcionamento do dia → se fora, bloqueia
    - Lista produtos disponíveis, agrupados por categoria
    - Seções de destaque: 🆕 Novidades, 🔥 Em Oferta (se houver)
-5. Pedido:
-   - Stepper +/- com observação livre opcional (até 200 chars)
-   - INSERT em itens_pedido (status 'novo', incluindo restaurante_id)
-6. Aba "Minha Comanda":
-   - Itens agrupados por rodada (≤2min entre criados)
+   - Cada produto é um card "tap-to-open" → abre a TELA DE DETALHE (padrão único,
+     com ou sem adicionais)
+5. Tela de detalhe do produto (ProdutoDetalhe, full screen):
+   - Carrega os grupos vinculados (ativos) + opções disponíveis, ordenados
+   - selecao 'unica' → radio; 'multipla' → checkbox (bloqueia acima de max_escolhas)
+   - Validação no client espelhando a RPC: botão desabilitado enquanto grupo
+     obrigatório não atende min; total recalculado ao vivo (helper calcComanda)
+   - Observação livre (até 200 chars) + quantidade
+   - "Adicionar ao pedido" → adiciona ao CARRINHO local (não envia ainda)
+6. Carrinho + envio:
+   - Barra "Ver pedido" → modal lista as linhas (adicionais + obs + subtotais), remover por linha
+   - "Enviar pedido" dispara `criar_item_pedido` (RPC) para CADA linha; falha parcial
+     remove as enviadas e mantém o resto. O frontend só manda os IDs dos adicionais.
+7. Aba "Minha Comanda":
+   - Itens agrupados por rodada (≤2min entre criados), com os adicionais sob cada item
+   - Total via helper `calcComanda` (subtotalItem/totalComanda) — mesma fonte do garçom/checkout
    - Realtime: status atualiza automaticamente
    - Cliente pode cancelar item com status 'novo' (UPDATE com guard WHERE status='novo')
    - Botão "Solicitar conta" → toast (sem ação backend ainda)
@@ -348,9 +432,9 @@ exibidas normalmente.
 ```
 1. Tema escuro obrigatório (fundo --primary-dk)
 2. 3 abas: Novos | Preparando | Prontos
-3. Query: itens_pedido JOIN produtos JOIN comandas JOIN mesas
+3. Query: itens_pedido JOIN produtos JOIN comandas JOIN mesas + itens_pedido_adicionais (nested)
    WHERE status IN ('novo','em_preparo','pronto')
-4. Cards mostram: mesa/quadra, nome cliente, itens com OBSERVAÇÃO em destaque
+4. Cards mostram: mesa/quadra, itens com ADICIONAIS e OBSERVAÇÃO em destaque (peso 700, terracota)
 5. Tempo > 15min → cor de urgência
 6. Botões transitam status:
    novo → em_preparo → pronto → entregue (some)
@@ -375,7 +459,7 @@ exibidas normalmente.
 
 ```
 1. Header: mesa como identidade (+ nome e CPF parcial apenas em comandas legadas)
-2. Histórico agrupado por rodada
+2. Histórico agrupado por rodada (com os adicionais e o subtotal de cada item via helper)
 3. Modal "Encerrar e Cobrar":
    - Toggle taxa de serviço (configurável por restaurante)
    - Stepper "Número de pessoas" para divisão igual
@@ -391,10 +475,12 @@ exibidas normalmente.
 ### 5. Admin (/admin)
 
 ```
-- /admin                   → Dashboard: faturamento dia, pedidos, produto top, mesa top, gráfico por hora
-- /admin/cardapio          → CRUD produtos + categorias, toggle disponível, upload de foto
-- /admin/mesas             → CRUD mesas, gerar QR Code com qrcode.react
-- /admin/configuracoes     → Taxa, horário, pausa de pedidos
+- /admin                     → Dashboard: faturamento dia, pedidos, produto top, mesa top, gráfico por hora
+- /admin/cardapio            → CRUD produtos + categorias, toggle disponível, upload de foto;
+                               no editor de produto: seção "Adicionais e opções" (vincular grupos)
+- /admin/cardapio/adicionais → CRUD de grupos de adicionais reutilizáveis + suas opções
+- /admin/mesas               → CRUD mesas, gerar QR Code com qrcode.react
+- /admin/configuracoes       → Taxa, horário, pausa de pedidos
 ```
 
 ### 6. Super Admin (/super-admin)
@@ -511,6 +597,16 @@ fmt.time(v)       // 19h32
 fmt.elapsed(v)    // 12min, 1h05min
 ```
 
+### Cálculo de total — SEMPRE via `lib/calcComanda.ts`
+
+Nunca somar item na mão. Usar os helpers (fonte única para cliente, garçom e checkout):
+
+```typescript
+subtotalItem(item)   // (preco_base_snapshot ?? produto.preco) + Σ adicionais.preco_snapshot, × qtd
+totalComanda(itens)  // soma os subtotais dos itens não cancelados
+```
+Itens legados (sem `preco_base_snapshot`) caem no fallback `produto.preco`.
+
 ---
 
 ## ✅ Funcionalidades implementadas
@@ -532,6 +628,10 @@ fmt.elapsed(v)    // 12min, 1h05min
 - [x] Observação livre por item (com destaque na cozinha)
 - [x] Taxa de serviço configurável
 - [x] Horário de funcionamento + pausa de pedidos
+- [x] Adicionais estruturados: grupos reutilizáveis (única/múltipla, obrig., min/max),
+      opções com preço, vínculo a produtos; tela de detalhe + carrinho no cliente;
+      cálculo/validação/snapshot 100% no servidor (RPC `criar_item_pedido`)
+- [x] Cálculo de total centralizado em `lib/calcComanda.ts` (cliente, garçom e checkout)
 
 ## ⏳ Gaps conhecidos (roadmap)
 
@@ -544,7 +644,7 @@ fmt.elapsed(v)    // 12min, 1h05min
 - [ ] Testes E2E (Playwright)
 
 ### Operacional
-- [ ] Modificadores estruturados (extras pagos)
+- [ ] Ofertas valendo no pedido (RPC honrar em_oferta/oferta_preco no snapshot)
 - [ ] Estoque básico (produto "esgotado hoje")
 - [ ] Edição de pedido após enviar
 - [ ] Divisão por itens (não só igual)
@@ -577,6 +677,9 @@ fmt.elapsed(v)    // 12min, 1h05min
 - ❌ Não criar autenticação pra cliente final em `/mesa/[id]`
 - ❌ Não esquecer `unsubscribe` em useEffect com Realtime
 - ❌ Não esquecer guards de race condition em UPDATEs críticos (ex: cancelamento de item precisa de `WHERE status='novo'`)
+- ❌ Não enviar preço de adicional/produto pelo client — só os IDs; o preço é snapshot no servidor
+- ❌ Não inserir direto em `itens_pedido` no fluxo do cliente — usar SEMPRE a RPC `criar_item_pedido`
+- ❌ Não somar total de comanda na mão — usar `subtotalItem`/`totalComanda` de `lib/calcComanda.ts`
 
 ---
 
@@ -605,4 +708,4 @@ Quando o usuário pedir nova funcionalidade:
 ---
 
 **Última atualização:** Junho de 2026
-**Versão do produto:** 0.2.0 — MVP em produção (modo mesa fixa: comanda direto na mesa)
+**Versão do produto:** 0.3.0 — MVP em produção (modo mesa fixa + adicionais estruturados)

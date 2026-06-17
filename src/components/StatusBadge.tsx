@@ -1,7 +1,7 @@
 import type { ItemStatus } from '@/types'
 
 const MAP: Record<ItemStatus, { label: string; color: string }> = {
-  novo:       { label: 'Aguardando', color: 'var(--status-new)' },
+  novo:       { label: 'Aguardando Preparo', color: 'var(--status-new)' },
   em_preparo: { label: 'Preparando', color: 'var(--status-prep)' },
   pronto:     { label: 'Pronto ✓',  color: 'var(--status-ready)' },
   entregue:   { label: 'Entregue',   color: 'var(--muted)' },

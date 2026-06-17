@@ -334,6 +334,7 @@ export default function CardapioView({ mesa, comandaId, onReset }: Props) {
           itens={itensQ.data ?? []}
           loading={itensQ.isLoading}
           error={itensQ.isError ? (itensQ.error as any) : null}
+          taxaPercentual={disponibilidadeQ.data?.restaurante?.taxa_servico_percentual ?? 10}
           onRefetch={() => itensQ.refetch()}
           onCancelarItem={cancelarItem}
           onSolicitarConta={solicitarConta}
@@ -464,11 +465,12 @@ export default function CardapioView({ mesa, comandaId, onReset }: Props) {
 }
 
 function MinhaComanda({
-  itens, loading, error, onRefetch, onCancelarItem, onSolicitarConta,
+  itens, loading, error, taxaPercentual, onRefetch, onCancelarItem, onSolicitarConta,
 }: {
   itens: ItemPedido[]
   loading: boolean
   error: any
+  taxaPercentual: number
   onRefetch: () => void
   onCancelarItem: (id: string) => void
   onSolicitarConta: () => void
@@ -476,6 +478,9 @@ function MinhaComanda({
   const [confirmingId, setConfirmingId] = useState<string | null>(null)
   const rounds = useMemo(() => groupRounds(itens), [itens])
   const subtotal = totalComanda(itens)
+  // Mesma fórmula/arredondamento do checkout do garçom (taxa aplicada por padrão)
+  const servico = Math.round(subtotal * (taxaPercentual / 100) * 100) / 100
+  const total = subtotal + servico
 
   return (
     <>
@@ -629,13 +634,32 @@ function MinhaComanda({
         className="absolute bottom-0 left-0 right-0 px-6 pt-4 pb-5 safe-bottom"
         style={{ background: 'var(--bg)', borderTop: '1px solid var(--line)' }}
       >
-        <div className="flex justify-between items-baseline mb-3">
+        <div className="flex justify-between items-baseline mb-1">
           <span className="text-sm" style={{ color: 'var(--text-mid)' }}>Subtotal</span>
+          <span className="mono-num text-sm" style={{ color: 'var(--text-mid)' }}>
+            {fmt.currency(subtotal)}
+          </span>
+        </div>
+        {servico > 0 && (
+          <div className="flex justify-between items-baseline mb-2">
+            <span className="text-sm" style={{ color: 'var(--text-mid)' }}>
+              Taxa de serviço ({taxaPercentual}%)
+            </span>
+            <span className="mono-num text-sm" style={{ color: 'var(--text-mid)' }}>
+              {fmt.currency(servico)}
+            </span>
+          </div>
+        )}
+        <div
+          className="flex justify-between items-baseline mb-3 pt-2"
+          style={{ borderTop: '1px solid var(--line)' }}
+        >
+          <span className="text-sm font-bold" style={{ color: 'var(--ink)' }}>Total</span>
           <span
             className="serif mono-num text-xl"
             style={{ color: 'var(--accent)', fontWeight: 600 }}
           >
-            {fmt.currency(subtotal)}
+            {fmt.currency(total)}
           </span>
         </div>
         <button
