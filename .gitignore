@@ -13,3 +13,6 @@ next-env.d.ts
 
 
 mocks
+# PWA (serwist) — service worker gerado no build
+public/sw.js
+public/swe-worker-*.js

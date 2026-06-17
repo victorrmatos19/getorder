@@ -1,5 +1,6 @@
 import ProtectedRoute from '@/components/ProtectedRoute'
 import { RestauranteProvider } from '@/lib/contexts/RestauranteContext'
+import InstallPrompt from '@/components/InstallPrompt'
 import AdminNav from './AdminNav'
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
@@ -11,6 +12,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           <AdminNav />
         </div>
       </RestauranteProvider>
+      <InstallPrompt />
     </ProtectedRoute>
   )
 }

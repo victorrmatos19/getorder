@@ -1,3 +1,13 @@
+import withSerwistInit from '@serwist/next'
+
+// PWA (staff): gera o service worker a partir de src/app/sw.ts.
+// Desabilitado em DEV de propósito — evita o SW servir build antigo enquanto se desenvolve.
+const withSerwist = withSerwistInit({
+  swSrc: 'src/app/sw.ts',
+  swDest: 'public/sw.js',
+  disable: process.env.NODE_ENV === 'development',
+})
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
@@ -12,4 +22,4 @@ const nextConfig = {
   },
 }
 
-export default nextConfig
+export default withSerwist(nextConfig)

@@ -20,6 +20,17 @@ const sans = Work_Sans({
 export const metadata: Metadata = {
   title: 'GetOrder — Comandas digitais',
   description: 'Comandas digitais por QR Code.',
+  manifest: '/manifest.webmanifest',
+  // iOS: abre em tela cheia quando adicionado à Tela de Início. O convite visível, porém,
+  // só aparece no staff (InstallPrompt) — o cliente em /mesa usa como site normal.
+  appleWebApp: {
+    capable: true,
+    title: 'GetOrder',
+    statusBarStyle: 'default',
+  },
+  icons: {
+    apple: '/apple-touch-icon.png',
+  },
 }
 
 export const viewport: Viewport = {
