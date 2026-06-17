@@ -49,8 +49,10 @@ export default function NovoRestaurantePage() {
           categorias_padrao: true,
         }),
       })
-      const json = await res.json()
-      if (!res.ok) throw new Error(json.error || 'Erro inesperado')
+      // Parse defensivo: se a resposta vier sem JSON (ex.: 500 de plataforma), não quebra
+      const raw = await res.text()
+      const json = raw ? JSON.parse(raw) : {}
+      if (!res.ok) throw new Error(json.error || `Erro ${res.status} ao criar restaurante.`)
       setOk({ slug: json.restaurante.slug })
     } catch (e: any) {
       setErr(e.message || 'Erro ao criar restaurante.')

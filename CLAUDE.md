@@ -188,7 +188,7 @@ produtos (
   restaurante_id uuid FK,
   categoria_id uuid FK,
   nome text,
-  descricao text,
+  descricao text NOT NULL DEFAULT '',   -- enviar '' quando vazia (NUNCA null) no form
   preco numeric(10,2),
   oferta_preco numeric(10,2),
   em_oferta boolean,
@@ -516,6 +516,14 @@ exibidas normalmente.
 - /super-admin/restaurantes/[id]      → Edita, lista usuários, ativa/desativa
 ```
 
+**Rota `POST /api/super-admin/restaurantes`** (`createAdminClient` / service role): cria o
+restaurante + **categorias padrão** + **horários padrão (7 dias abertos, 00:00–23:59)** + usuário
+admin + perfil. Os horários são essenciais: sem eles o cliente vê "Fora do horário de funcionamento"
+e não pede (`useDisponibilidade` trata dia sem horário como fechado). Logo, **todo restaurante novo
+já nasce operacional**; o admin refina depois em `/admin/configuracoes → Horário`.
+- ⚠️ Exige `SUPABASE_SERVICE_ROLE_KEY` no ambiente (Vercel → Environment Variables, **Production**).
+  Sem ela, `createAdminClient()` lança e a rota retorna 500; o frontend trata e mostra mensagem clara.
+
 ---
 
 ## 🔐 Segurança e LGPD
@@ -565,6 +573,9 @@ SUPABASE_SERVICE_ROLE_KEY=eyJ...        # só server-side (rota super-admin)
 
 ⚠️ **NUNCA** commitar `.env*.local` (gitignored). Sempre usar `NEXT_PUBLIC_` no prefix das vars que vão pro client.
 ⚠️ **NUNCA** usar `SUPABASE_SERVICE_ROLE_KEY` no frontend. Bypassa RLS.
+⚠️ **`SUPABASE_SERVICE_ROLE_KEY` precisa estar no Vercel (Production).** É segredo server-side
+(sem `NEXT_PUBLIC_`), então **não** vai junto com o deploy do código — cadastrar à parte em
+Environment Variables. Sem ela, a rota `POST /api/super-admin/restaurantes` falha (criar restaurante).
 
 ### Supabase Auth Configuration
 - Site URL: `https://getorder.com.br` (ou domínio Vercel)
@@ -587,25 +598,32 @@ npm run db:status    # mostra URLs e chaves locais
 - **Studio (ver/editar dados):** http://127.0.0.1:54323 · **API:** http://127.0.0.1:54321 ·
   **Mailpit (e-mails de teste):** http://127.0.0.1:54324
 - **Login local:** mesmos e-mail/senha do PRD (os usuários foram replicados no seed).
-- As **fotos de produto não carregam** local (só os registros de Storage vieram, não os arquivos).
+- As fotos **antigas do 637** não carregam local (só os registros de Storage vieram no seed, não os
+  arquivos). Mas **upload e exibição de fotos novas funcionam local** (migration 010 + host local no
+  `next.config.mjs`).
 
 **Schema & migrations (importante):**
 - As migrations 001–007 (aplicadas no PRD na mão) foram **squashadas** num único baseline:
   `supabase/migrations/00000000000000_baseline.sql` = **dump do schema do PRD** (fonte da verdade).
   As antigas viraram histórico em `supabase/migrations_archive/` (fora do caminho de `db reset`).
+- Migrations **008–011** (em cima do baseline) — isolamento multi-tenant correto. Idempotentes
+  (`drop ... if exists` + `create`):
+  - `008_rls_select_tenant_scope.sql` — leitura: cardápio público, vendas escopadas (ver seção RLS).
+  - `009_force_tenant_on_write.sql` — trigger que carimba `restaurante_id` nas escritas de admin.
+  - `010_storage_policies.sql` — policies do bucket `produtos` (upload de foto).
+  - `011_restaurantes_admin_update.sql` — admin salva configs do próprio restaurante; protege `slug`/`ativo`.
 - `supabase/seed.sql` = dump dos **dados do PRD** (public + auth). **Gitignored** (dados reais +
   hashes). Para recriá-lo: `npx supabase db dump --linked --data-only -f supabase/seed.sql`.
 
-**Fluxo novo de mudança de banco (fim do "SQL na mão em produção"):**
+**Fluxo de mudança de banco (fim do "SQL na mão em produção"):**
 ```bash
 npx supabase migration new minha_mudanca   # cria SQL em supabase/migrations/
 npm run db:reset                            # testa local
 npm run db:push                             # aplica no PRD (supabase db push)
 ```
-> ⚠️ **Antes do 1º `db push`:** reconciliar o histórico do PRD uma única vez com
-> `npx supabase migration repair --status applied 00000000000000` (marca o baseline como já
-> aplicado no PRD — é só metadado, não recria schema). Sem isso, o push tenta reaplicar o
-> baseline e falha.
+> ✅ **Histórico do PRD já reconciliado** (baseline + 008–011 marcados como aplicados via
+> `migration repair`). Daqui pra frente, mudança de banco é **sempre** `migration new` →
+> `db:reset` (testa local) → `db:push`. **Não** rodar mais SQL na mão no PRD.
 
 ---
 
@@ -679,7 +697,10 @@ Itens legados (sem `preco_base_snapshot`) caem no fallback `produto.preco`.
 
 ## ✅ Funcionalidades implementadas
 
-- [x] Multi-tenant com RLS
+- [x] Multi-tenant com RLS (cardápio público + vendas escopadas; escrita carimba o tenant no
+      servidor via trigger `force_tenant_on_write`; admin gerencia só o próprio restaurante)
+- [x] Onboarding de restaurante novo via super-admin: cria categorias **e horários padrão** →
+      já nasce operacional; isolamento validado ponta-a-ponta (roteiro Suite 16)
 - [x] Autenticação 4 roles (super_admin, admin, garcom, cozinha)
 - [x] Fluxo cliente: abertura direta na mesa + cardápio + pedido + acompanhamento
 - [x] Cardápio com fotos (Supabase Storage)
@@ -748,6 +769,13 @@ Itens legados (sem `preco_base_snapshot`) caem no fallback `produto.preco`.
 - ❌ Não enviar preço de adicional/produto pelo client — só os IDs; o preço é snapshot no servidor
 - ❌ Não inserir direto em `itens_pedido` no fluxo do cliente — usar SEMPRE a RPC `criar_item_pedido`
 - ❌ Não somar total de comanda na mão — usar `subtotalItem`/`totalComanda` de `lib/calcComanda.ts`
+- ❌ Não **escopar por tenant a leitura do cardápio** (`produtos/categorias/mesas/restaurantes/…`) —
+  o `/mesa/[id]` é público; escopar quebra o cliente logado em outro tenant ("Mesa indisponível").
+  Só as **vendas** (`comandas/itens_pedido/itens_pedido_adicionais`) são escopadas na leitura.
+- ❌ Não mandar `null` para coluna `NOT NULL DEFAULT …` no INSERT (ex.: `produtos.descricao`) — o
+  default só vale quando a coluna é **omitida**; mandar `''`/o valor, não `null`.
+- ❌ Não rodar SQL na mão no PRD — usar `migration new` → `db:reset` → `db:push` (histórico já reconciliado).
+- ❌ Não esquecer de cadastrar `SUPABASE_SERVICE_ROLE_KEY` no Vercel (Production) — sem ela a criação de restaurante falha.
 
 ---
 
@@ -775,5 +803,6 @@ Quando o usuário pedir nova funcionalidade:
 
 ---
 
-**Última atualização:** Junho de 2026
+**Última atualização:** Junho de 2026 (hardening multi-tenant: migrations 008–011, onboarding de
+restaurante novo, isolamento cardápio/vendas)
 **Versão do produto:** 0.3.0 — MVP em produção (modo mesa fixa + adicionais estruturados)

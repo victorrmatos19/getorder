@@ -21,6 +21,7 @@ function slugify(input: string) {
 }
 
 export async function POST(req: Request) {
+ try {
   // 1) Verificar que o caller é super_admin
   const supabase = await createServerClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -35,7 +36,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Apenas super admin' }, { status: 403 })
   }
 
-  const body = (await req.json()) as Body
+  const body = (await req.json().catch(() => ({}))) as Body
   if (!body.nome?.trim()) {
     return NextResponse.json({ error: 'Informe o nome do restaurante.' }, { status: 400 })
   }
@@ -47,7 +48,18 @@ export async function POST(req: Request) {
   }
 
   const slug = body.slug?.trim() ? slugify(body.slug) : slugify(body.nome)
-  const admin = createAdminClient()
+
+  // Service role: sem essa env (server-side, não-NEXT_PUBLIC) o createAdminClient lança.
+  // Em produção, configurar SUPABASE_SERVICE_ROLE_KEY nas Environment Variables do Vercel.
+  let admin
+  try {
+    admin = createAdminClient()
+  } catch {
+    return NextResponse.json(
+      { error: 'Configuração do servidor incompleta: SUPABASE_SERVICE_ROLE_KEY ausente no ambiente (Vercel → Environment Variables).' },
+      { status: 500 },
+    )
+  }
 
   // 2) Criar restaurante
   const { data: rest, error: e1 } = await admin
@@ -105,4 +117,8 @@ export async function POST(req: Request) {
   }
 
   return NextResponse.json({ restaurante: rest, admin_user_id: created.user.id })
+ } catch (e: any) {
+  // Qualquer exceção não prevista vira JSON (evita corpo vazio → "Unexpected end of JSON input")
+  return NextResponse.json({ error: e?.message || 'Erro inesperado ao criar restaurante.' }, { status: 500 })
+ }
 }
