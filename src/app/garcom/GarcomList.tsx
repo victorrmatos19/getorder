@@ -90,35 +90,42 @@ export default function GarcomList() {
             const prontos = comandas
               .flatMap((c) => c.itens)
               .filter((i) => i.status === 'pronto').length
-            const status: 'free' | 'ok' | 'pending' =
-              prontos > 0 ? 'pending' : 'ok'
-            const borderColor =
-              status === 'pending' ? 'var(--status-new)' : 'var(--line)'
+            const temPronto = prontos > 0
+
+            // Card VERDE chamativo (texto branco) quando há item pronto para entregar;
+            // caso contrário, mantém o visual neutro creme atual.
+            const bgCard = temPronto ? 'var(--status-ready)' : 'var(--surface)'
+            const borderCard = temPronto ? 'var(--status-ready)' : 'var(--line)'
+            const corTexto = temPronto ? 'var(--bg)' : 'var(--ink)'
+            const corSub = temPronto ? 'rgba(250,249,245,0.78)' : 'var(--text-mid)'
+            const corPreco = temPronto ? 'var(--bg)' : 'var(--accent)'
+            const corSeta = temPronto ? 'rgba(250,249,245,0.78)' : 'var(--muted)'
+            const corLinha = temPronto ? 'rgba(255,255,255,0.18)' : 'var(--line)'
 
             return (
               <div
                 key={mesa.id}
                 className="rounded-xl"
                 style={{
-                  background: 'var(--surface)',
-                  border: `1px solid ${borderColor}`,
+                  background: bgCard,
+                  border: `1px solid ${borderCard}`,
                 }}
               >
                 <div
                   className="flex items-center justify-between px-4 py-3"
-                  style={{ borderBottom: '1px solid var(--line)' }}
+                  style={{ borderBottom: `1px solid ${corLinha}` }}
                 >
-                  <div className="serif text-lg" style={{ color: 'var(--ink)' }}>{mesa.nome}</div>
+                  <div className="serif text-lg" style={{ color: corTexto }}>{mesa.nome}</div>
                   <div className="flex items-center gap-2">
-                    {prontos > 0 && (
+                    {temPronto && (
                       <span
                         className="text-xs font-bold px-2 py-0.5 rounded-full"
-                        style={{ color: 'var(--status-new)', border: '1px solid var(--status-new)' }}
+                        style={{ color: 'var(--bg)', border: '1px solid rgba(255,255,255,0.5)' }}
                       >
                         {prontos} prontos
                       </span>
                     )}
-                    <span className="text-xs" style={{ color: 'var(--text-mid)' }}>
+                    <span className="text-xs" style={{ color: corSub }}>
                       {comandas.length} {comandas.length === 1 ? 'comanda' : 'comandas'}
                     </span>
                   </div>
@@ -133,24 +140,24 @@ export default function GarcomList() {
                         <Link
                           href={`/garcom/comanda/${c.id}`}
                           className="flex items-center justify-between px-4 py-3"
-                          style={{ minHeight: 56, borderTop: '1px solid var(--line)' }}
+                          style={{ minHeight: 56, borderTop: `1px solid ${corLinha}` }}
                         >
                           <div className="min-w-0">
-                            <div className="text-sm font-bold truncate" style={{ color: 'var(--ink)' }}>
+                            <div className="text-sm font-bold truncate" style={{ color: corTexto }}>
                               {c.cliente_nome || 'Comanda da mesa'}
                             </div>
-                            <div className="text-xs" style={{ color: 'var(--text-mid)' }}>
+                            <div className="text-xs" style={{ color: corSub }}>
                               {itemsCount} {itemsCount === 1 ? 'item' : 'itens'} · aberta {fmt.time(c.criado_em)}
                             </div>
                           </div>
                           <div className="flex items-center gap-3">
                             <span
                               className="mono-num text-sm font-bold"
-                              style={{ color: 'var(--accent)' }}
+                              style={{ color: corPreco }}
                             >
                               {fmt.currency(total)}
                             </span>
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" style={{ color: 'var(--muted)' }}>
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" style={{ color: corSeta }}>
                               <path d="M5 12h14M13 6l6 6-6 6" />
                             </svg>
                           </div>

@@ -60,9 +60,16 @@ const Relogio = memo(function Relogio() {
   return <>{hora}</>
 })
 
+type Group = {
+  key: string
+  mesa: string
+  cliente: string
+  criadoMin: number
+  itens: ItemPedido[]
+}
+
 export default function CozinhaPanel() {
   const qc = useQueryClient()
-  const [tab, setTab] = useState<Tab>('novo')
   const [toast, setToast] = useState({ visible: false, message: '' })
   const [busyId, setBusyId] = useState<string | null>(null)
 
@@ -86,18 +93,17 @@ export default function CozinhaPanel() {
     }
   }, [qc])
 
-  // Agrupar por comanda+status do tab atual
-  const groups = useMemo(() => {
-    type Group = {
-      key: string
-      mesa: string
-      cliente: string
-      criadoMin: number
-      itens: ItemPedido[]
+  // Agrupar por comanda dentro de cada status (uma lista por coluna do kanban)
+  const colunas = useMemo(() => {
+    const maps: Record<Tab, Map<string, Group>> = {
+      novo: new Map(),
+      em_preparo: new Map(),
+      pronto: new Map(),
     }
-    const map = new Map<string, Group>()
     for (const it of itens) {
-      if (it.status !== tab) continue
+      const status = it.status as Tab
+      if (!(status in maps)) continue
+      const map = maps[status]
       const key = it.comanda_id
       const mesa = (it.comanda as any)?.mesa?.nome ?? 'Mesa'
       const cliente = (it.comanda as any)?.cliente_nome ?? ''
@@ -110,8 +116,11 @@ export default function CozinhaPanel() {
         map.set(key, { key, mesa, cliente, criadoMin: min, itens: [it] })
       }
     }
-    return Array.from(map.values()).sort((a, b) => b.criadoMin - a.criadoMin)
-  }, [itens, tab])
+    return TABS.map((t) => ({
+      ...t,
+      groups: Array.from(maps[t.key].values()).sort((a, b) => b.criadoMin - a.criadoMin),
+    }))
+  }, [itens])
 
   const counts = useMemo(() => {
     const c = { novo: 0, em_preparo: 0, pronto: 0 } as Record<Tab, number>
@@ -121,14 +130,14 @@ export default function CozinhaPanel() {
     return c
   }, [itens])
 
-  const avancar = async (group: { itens: ItemPedido[] }) => {
+  const avancar = async (group: Group, status: Tab) => {
     setBusyId(group.itens[0]?.id ?? null)
     try {
       const supabase = createClient()
       const ids = group.itens.map((i) => i.id)
       const { error } = await supabase
         .from('itens_pedido')
-        .update({ status: NEXT_STATUS[tab] })
+        .update({ status: NEXT_STATUS[status] })
         .in('id', ids)
       if (error) throw error
       qc.invalidateQueries({ queryKey: ['itens', 'cozinha'] })
@@ -139,8 +148,6 @@ export default function CozinhaPanel() {
     }
   }
 
-  const tabCfg = TABS.find((x) => x.key === tab)!
-
   return (
     <div className="min-h-screen flex flex-col" style={{ background: 'var(--primary-dk)', color: '#F2F0E8' }}>
       <StaffHeader
@@ -149,40 +156,8 @@ export default function CozinhaPanel() {
         title={<Relogio />}
       />
 
-      {/* Tabs */}
-      <div
-        className="flex gap-6 px-6"
-        style={{ borderBottom: '1px solid rgba(255,255,255,0.08)' }}
-      >
-        {TABS.map((t) => {
-          const active = tab === t.key
-          return (
-            <button
-              key={t.key}
-              onClick={() => setTab(t.key)}
-              className="py-3 text-sm flex items-center gap-2"
-              style={{
-                color: active ? t.color : 'rgba(250,249,245,0.45)',
-                fontWeight: active ? 700 : 400,
-                borderBottom: active ? `2px solid ${t.color}` : '2px solid transparent',
-                marginBottom: -1,
-                background: 'transparent',
-                border: 'none',
-                borderRadius: 0,
-              }}
-            >
-              {t.label}
-              <span className="mono-num text-xs opacity-70">{counts[t.key]}</span>
-            </button>
-          )
-        })}
-      </div>
-
-      <div className="flex-1 overflow-y-auto px-6 py-4 pb-8" key={tab}>
-        {isLoading && (
-          <div className="py-16 flex justify-center"><Spinner size={20} color="var(--accent-lt)" /></div>
-        )}
-        {isError && (
+      {isError && (
+        <div className="px-6 py-4">
           <EmptyState
             icon="⚠️"
             title="Não foi possível carregar"
@@ -193,106 +168,137 @@ export default function CozinhaPanel() {
               </button>
             }
           />
-        )}
-        {!isLoading && !isError && groups.length === 0 && (
-          <div className="text-center py-20 text-sm" style={{ color: 'rgba(250,249,245,0.45)' }}>
-            Nenhum pedido neste estado.
-          </div>
-        )}
+        </div>
+      )}
+      {isLoading && (
+        <div className="py-16 flex justify-center"><Spinner size={20} color="var(--accent-lt)" /></div>
+      )}
 
-        {groups.map((g) => {
-          const urgent = g.criadoMin > 15
-          const danger = '#E08A74'
-          return (
-            <div
-              key={g.key}
-              className="rounded-xl p-4 mb-3"
-              style={{
-                background: '#242821',
-                border: `1px solid ${urgent ? danger : 'rgba(255,255,255,0.08)'}`,
-              }}
-            >
-              <div className="flex justify-between items-start mb-3">
-                <div className="min-w-0">
-                  <div className="text-base font-bold leading-tight" style={{ color: '#F2F0E8' }}>
-                    {g.mesa}
-                  </div>
-                  {g.cliente && (
-                    <div className="text-xs mt-0.5" style={{ color: 'rgba(250,249,245,0.62)' }}>
-                      {g.cliente}
+      {/* Kanban: 3 colunas visíveis ao mesmo tempo (Novos / Preparando / Prontos) */}
+      {!isError && !isLoading && (
+        <div className="flex-1 min-h-0 overflow-x-auto px-6 py-4">
+          <div className="flex gap-4 h-full">
+            {colunas.map((col) => (
+              <div key={col.key} className="flex flex-col min-h-0 min-w-[300px] flex-1">
+                {/* Cabeçalho fixo da coluna */}
+                <div
+                  className="flex items-center gap-2 pb-3 mb-3 text-sm shrink-0"
+                  style={{
+                    color: col.color,
+                    fontWeight: 700,
+                    borderBottom: `2px solid ${col.color}`,
+                  }}
+                >
+                  {col.label}
+                  <span className="mono-num text-xs opacity-70">{counts[col.key]}</span>
+                </div>
+
+                {/* Lista rolável da coluna */}
+                <div className="flex-1 overflow-y-auto pr-1 pb-8">
+                  {col.groups.length === 0 && (
+                    <div className="text-center py-12 text-sm" style={{ color: 'rgba(250,249,245,0.45)' }}>
+                      Nenhum pedido neste estado.
                     </div>
                   )}
-                </div>
-                <div
-                  className="flex items-center gap-1 text-xs shrink-0"
-                  style={{ color: urgent ? danger : 'rgba(250,249,245,0.62)', fontWeight: urgent ? 700 : 400 }}
-                >
-                  {urgent && (
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={danger} strokeWidth="1.8">
-                      <path d="M12 3l10 18H2L12 3z" />
-                      <path d="M12 10v5M12 18v.5" />
-                    </svg>
-                  )}
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                    <circle cx="12" cy="12" r="9" />
-                    <path d="M12 7v5l3 2" />
-                  </svg>
-                  <span className="mono-num">{g.criadoMin} min</span>
-                </div>
-              </div>
 
-              <div className="mb-4">
-                {g.itens.map((it) => (
-                  <div key={it.id} className="text-sm py-1.5" style={{ color: '#F2F0E8' }}>
-                    {it.produto?.nome ?? '—'} <span className="opacity-60">× {it.quantidade}</span>
-                    {agruparAdicionais(it).map((gr, idx) => (
+                  {col.groups.map((g) => {
+                    const urgent = g.criadoMin > 15
+                    const danger = '#E08A74'
+                    return (
                       <div
-                        key={idx}
-                        className="text-sm font-bold mt-1 px-2 py-1 rounded uppercase"
+                        key={g.key}
+                        className="rounded-xl p-4 mb-3"
                         style={{
-                          color: '#E08A74',
-                          background: 'rgba(224,138,116,0.08)',
-                          borderLeft: '3px solid #E08A74',
-                          letterSpacing: '0.02em',
+                          background: '#242821',
+                          border: `1px solid ${urgent ? danger : 'rgba(255,255,255,0.08)'}`,
                         }}
                       >
-                        {gr.grupo ? `${gr.grupo}: ` : '› '}{gr.nomes.join(', ')}
-                      </div>
-                    ))}
-                    {it.obs && (
-                      <div
-                        className="text-sm font-bold mt-1 px-2 py-1 rounded"
-                        style={{
-                          color: '#E08A74',
-                          background: 'rgba(224,138,116,0.08)',
-                          borderLeft: '3px solid #E08A74',
-                        }}
-                      >
-                        ↳ {it.obs}
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
+                        <div className="flex justify-between items-start mb-3">
+                          <div className="min-w-0">
+                            <div className="text-base font-bold leading-tight" style={{ color: '#F2F0E8' }}>
+                              {g.mesa}
+                            </div>
+                            {g.cliente && (
+                              <div className="text-xs mt-0.5" style={{ color: 'rgba(250,249,245,0.62)' }}>
+                                {g.cliente}
+                              </div>
+                            )}
+                          </div>
+                          <div
+                            className="flex items-center gap-1 text-xs shrink-0"
+                            style={{ color: urgent ? danger : 'rgba(250,249,245,0.62)', fontWeight: urgent ? 700 : 400 }}
+                          >
+                            {urgent && (
+                              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={danger} strokeWidth="1.8">
+                                <path d="M12 3l10 18H2L12 3z" />
+                                <path d="M12 10v5M12 18v.5" />
+                              </svg>
+                            )}
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                              <circle cx="12" cy="12" r="9" />
+                              <path d="M12 7v5l3 2" />
+                            </svg>
+                            <span className="mono-num">{g.criadoMin} min</span>
+                          </div>
+                        </div>
 
-              <button
-                onClick={() => avancar(g)}
-                disabled={busyId === g.itens[0]?.id}
-                className="w-full rounded-xl text-sm font-bold flex items-center justify-center gap-2"
-                style={{
-                  minHeight: 44,
-                  background: tabCfg.color,
-                  color: '#1A1E17',
-                  border: 'none',
-                  cursor: 'pointer',
-                }}
-              >
-                {busyId === g.itens[0]?.id ? <Spinner color="#1A1E17" /> : NEXT_LABEL[tab]}
-              </button>
-            </div>
-          )
-        })}
-      </div>
+                        <div className="mb-4">
+                          {g.itens.map((it) => (
+                            <div key={it.id} className="text-sm py-1.5" style={{ color: '#F2F0E8' }}>
+                              {it.produto?.nome ?? '—'} <span className="opacity-60">× {it.quantidade}</span>
+                              {agruparAdicionais(it).map((gr, idx) => (
+                                <div
+                                  key={idx}
+                                  className="text-sm font-bold mt-1 px-2 py-1 rounded uppercase"
+                                  style={{
+                                    color: '#E08A74',
+                                    background: 'rgba(224,138,116,0.08)',
+                                    borderLeft: '3px solid #E08A74',
+                                    letterSpacing: '0.02em',
+                                  }}
+                                >
+                                  {gr.grupo ? `${gr.grupo}: ` : '› '}{gr.nomes.join(', ')}
+                                </div>
+                              ))}
+                              {it.obs && (
+                                <div
+                                  className="text-sm font-bold mt-1 px-2 py-1 rounded"
+                                  style={{
+                                    color: '#E08A74',
+                                    background: 'rgba(224,138,116,0.08)',
+                                    borderLeft: '3px solid #E08A74',
+                                  }}
+                                >
+                                  ↳ {it.obs}
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+
+                        <button
+                          onClick={() => avancar(g, col.key)}
+                          disabled={busyId === g.itens[0]?.id}
+                          className="w-full rounded-xl text-sm font-bold flex items-center justify-center gap-2"
+                          style={{
+                            minHeight: 44,
+                            background: col.color,
+                            color: '#1A1E17',
+                            border: 'none',
+                            cursor: 'pointer',
+                          }}
+                        >
+                          {busyId === g.itens[0]?.id ? <Spinner color="#1A1E17" /> : NEXT_LABEL[col.key]}
+                        </button>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <Toast
         visible={toast.visible}
