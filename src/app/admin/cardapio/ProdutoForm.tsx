@@ -5,6 +5,7 @@ import Image from 'next/image'
 import { createClient } from '@/lib/supabase/client'
 import Spinner from '@/components/Spinner'
 import { useRestaurante } from '@/lib/contexts/RestauranteContext'
+import { fmt } from '@/lib/formatters'
 import { uid } from '@/lib/uid'
 import ProdutoGruposSection from './ProdutoGruposSection'
 import type { Categoria, Produto } from '@/types'
@@ -23,15 +24,16 @@ export default function ProdutoForm({ initial, defaultCategoriaId, categorias, o
   const { restauranteId } = useRestaurante()
   const [nome, setNome] = useState(initial?.nome ?? '')
   const [descricao, setDescricao] = useState(initial?.descricao ?? '')
-  const [preco, setPreco] = useState(initial?.preco?.toString().replace('.', ',') ?? '')
+  const [preco, setPreco] = useState(initial?.preco != null ? fmt.money(initial.preco) : '')
   const [categoriaId, setCategoriaId] = useState<string>(
     initial?.categoria_id ?? defaultCategoriaId ?? categorias[0]?.id ?? '',
   )
   const [ordem, setOrdem] = useState(initial?.ordem?.toString() ?? '0')
   const [disponivel, setDisponivel] = useState(initial?.disponivel ?? true)
+  const [esgotado, setEsgotado] = useState(initial?.esgotado ?? false)
   const [emOferta, setEmOferta] = useState(initial?.em_oferta ?? false)
   const [ofertaPreco, setOfertaPreco] = useState(
-    initial?.oferta_preco != null ? initial.oferta_preco.toString().replace('.', ',') : '',
+    initial?.oferta_preco != null ? fmt.money(initial.oferta_preco) : '',
   )
   const [novidade, setNovidade] = useState(initial?.novidade ?? false)
   const [destaqueOrdem, setDestaqueOrdem] = useState(initial?.destaque_ordem?.toString() ?? '999')
@@ -58,11 +60,11 @@ export default function ProdutoForm({ initial, defaultCategoriaId, categorias, o
   const submit = async () => {
     if (!nome.trim())     { setErr('Informe o nome.'); return }
     if (!categoriaId)     { setErr('Escolha a categoria.'); return }
-    const precoNum = parseFloat(preco.replace(',', '.'))
+    const precoNum = fmt.moneyParse(preco)
     if (!Number.isFinite(precoNum) || precoNum <= 0) { setErr('Preço inválido.'); return }
     let ofertaNum: number | null = null
     if (emOferta) {
-      ofertaNum = parseFloat(ofertaPreco.replace(',', '.'))
+      ofertaNum = fmt.moneyParse(ofertaPreco)
       if (!Number.isFinite(ofertaNum) || ofertaNum <= 0) { setErr('Preço promocional inválido.'); return }
       if (ofertaNum >= precoNum) { setErr('Preço promocional deve ser menor que o preço normal.'); return }
     }
@@ -101,6 +103,7 @@ export default function ProdutoForm({ initial, defaultCategoriaId, categorias, o
         destaque_ordem: destaqueNum,
         ordem: ordemNum,
         disponivel,
+        esgotado,
         foto_url,
       }
 
@@ -213,9 +216,9 @@ export default function ProdutoForm({ initial, defaultCategoriaId, categorias, o
           <Field label="Preço (R$)">
             <input
               value={preco}
-              onChange={(e) => setPreco(e.target.value.replace(/[^0-9,.]/g, ''))}
+              onChange={(e) => setPreco(fmt.moneyMask(e.target.value))}
               placeholder="0,00"
-              inputMode="decimal"
+              inputMode="numeric"
               className="w-full py-3 text-base mono-num"
               style={{ border: 'none', borderBottom: '1px solid var(--line)', background: 'transparent', color: 'var(--ink)' }}
             />
@@ -264,9 +267,9 @@ export default function ProdutoForm({ initial, defaultCategoriaId, categorias, o
               <label className="block text-xs mb-1" style={{ color: 'var(--text-mid)' }}>Preço promocional (R$)</label>
               <input
                 value={ofertaPreco}
-                onChange={(e) => setOfertaPreco(e.target.value.replace(/[^0-9,.]/g, ''))}
+                onChange={(e) => setOfertaPreco(fmt.moneyMask(e.target.value))}
                 placeholder="0,00"
-                inputMode="decimal"
+                inputMode="numeric"
                 className="w-full py-2 text-base mono-num"
                 style={{ border: 'none', borderBottom: '1px solid var(--line)', background: 'transparent', color: 'var(--ink)' }}
               />
@@ -297,6 +300,21 @@ export default function ProdutoForm({ initial, defaultCategoriaId, categorias, o
             style={{ width: 18, height: 18 }}
           />
           <span style={{ color: 'var(--ink)' }}>Disponível para venda</span>
+        </label>
+
+        <label className="flex items-center gap-3 mt-3 text-sm">
+          <input
+            type="checkbox"
+            checked={esgotado}
+            onChange={(e) => setEsgotado(e.target.checked)}
+            style={{ width: 18, height: 18 }}
+          />
+          <span style={{ color: 'var(--ink)' }}>
+            Esgotado (sem estoque hoje)
+            <span className="block text-xs" style={{ color: 'var(--text-mid)' }}>
+              Continua no cardápio, riscado, sem poder pedir
+            </span>
+          </span>
         </label>
 
         <ProdutoGruposSection produtoId={initial?.id} restauranteId={restauranteId} />

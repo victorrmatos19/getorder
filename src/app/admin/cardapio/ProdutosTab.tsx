@@ -171,6 +171,11 @@ export default function ProdutosTab() {
                     onClick={() => update.mutate({ id: p.id, patch: { disponivel: !p.disponivel } })}
                   />
                   <QuickToggle
+                    label="Esgotado"
+                    active={p.esgotado}
+                    onClick={() => update.mutate({ id: p.id, patch: { esgotado: !p.esgotado } })}
+                  />
+                  <QuickToggle
                     label="Novidade"
                     active={p.novidade}
                     onClick={() => update.mutate({ id: p.id, patch: { novidade: !p.novidade } })}

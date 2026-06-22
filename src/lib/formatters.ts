@@ -2,6 +2,22 @@ export const fmt = {
   currency: (v: number) =>
     v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }),
 
+  // número → "1.850,00" (sem símbolo; o rótulo do campo já diz "R$")
+  money: (v: number) =>
+    v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+
+  // input cru → máscara em centavos: pega só dígitos e divide por 100
+  moneyMask: (raw: string) => {
+    const d = raw.replace(/\D/g, '')
+    return d ? fmt.money(parseInt(d, 10) / 100) : ''
+  },
+
+  // string mascarada → número (robusto a milhar/vírgula): só dígitos / 100
+  moneyParse: (masked: string) => {
+    const d = masked.replace(/\D/g, '')
+    return d ? parseInt(d, 10) / 100 : 0
+  },
+
   cpf: (v: string) =>
     v.replace(/\D/g, '').replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4'),
 

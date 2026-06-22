@@ -12,7 +12,9 @@ type Props = {
 
 export default function ProductCard({ produto, onOpen, isLast }: Props) {
   const hasFoto = !!produto.foto_url
+  const isEsgotado = produto.esgotado
   const isOferta =
+    !isEsgotado &&
     produto.em_oferta && produto.oferta_preco != null && produto.oferta_preco < produto.preco
 
   return (
@@ -20,11 +22,23 @@ export default function ProductCard({ produto, onOpen, isLast }: Props) {
       type="button"
       onClick={onOpen}
       className="w-full text-left py-4 flex items-start gap-4"
-      style={{ borderBottom: isLast ? 'none' : '1px solid var(--line)', background: 'transparent' }}
+      style={{
+        borderBottom: isLast ? 'none' : '1px solid var(--line)',
+        background: 'transparent',
+        opacity: isEsgotado ? 0.6 : 1,
+      }}
     >
       <div className="flex-1 min-w-0">
-        {(produto.novidade || produto.em_oferta) && (
+        {(produto.novidade || produto.em_oferta || isEsgotado) && (
           <div className="flex gap-1.5 mb-1">
+            {isEsgotado && (
+              <span
+                className="text-[10px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider"
+                style={{ background: 'var(--accent)', color: '#FAF9F5' }}
+              >
+                Esgotado
+              </span>
+            )}
             {produto.novidade && (
               <span
                 className="text-[10px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider"
@@ -44,7 +58,10 @@ export default function ProductCard({ produto, onOpen, isLast }: Props) {
           </div>
         )}
         <div className="flex items-baseline justify-between gap-3 mb-0.5">
-          <div className="text-base truncate" style={{ color: 'var(--ink)' }}>
+          <div
+            className={`text-base truncate${isEsgotado ? ' line-through' : ''}`}
+            style={{ color: isEsgotado ? 'var(--accent)' : 'var(--ink)' }}
+          >
             {produto.nome}
           </div>
           <div className="flex items-baseline gap-2 shrink-0">
@@ -53,7 +70,10 @@ export default function ProductCard({ produto, onOpen, isLast }: Props) {
                 {fmt.currency(produto.preco)}
               </span>
             )}
-            <span className="mono-num text-base font-bold" style={{ color: 'var(--accent)' }}>
+            <span
+              className={`mono-num text-base font-bold${isEsgotado ? ' line-through' : ''}`}
+              style={{ color: isEsgotado ? 'var(--muted)' : 'var(--accent)' }}
+            >
               {fmt.currency(isOferta ? produto.oferta_preco! : produto.preco)}
             </span>
           </div>

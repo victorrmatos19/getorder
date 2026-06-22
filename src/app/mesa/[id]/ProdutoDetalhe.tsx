@@ -85,7 +85,7 @@ export default function ProdutoDetalhe({ produto, bloqueado, onClose, onAddToCar
     [produto.preco, quantidade, idsSelecionados, adicionalById],
   )
 
-  const podeAdicionar = !bloqueado && quantidade >= 1 && gruposPendentes.length === 0
+  const podeAdicionar = !bloqueado && !produto.esgotado && quantidade >= 1 && gruposPendentes.length === 0
 
   const confirmar = () => {
     if (!podeAdicionar) return
@@ -287,7 +287,9 @@ export default function ProdutoDetalhe({ produto, bloqueado, onClose, onAddToCar
             cursor: podeAdicionar ? 'pointer' : 'not-allowed',
           }}
         >
-          {bloqueado ? (
+          {produto.esgotado ? (
+            <span className="w-full text-center">Produto esgotado</span>
+          ) : bloqueado ? (
             <span className="w-full text-center">Pedidos indisponíveis no momento</span>
           ) : gruposPendentes.length > 0 ? (
             <span className="w-full text-center">Selecione as opções obrigatórias</span>

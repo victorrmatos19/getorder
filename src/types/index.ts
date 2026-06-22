@@ -55,6 +55,8 @@ export type Produto = {
   novidade: boolean
   destaque_ordem: number
   disponivel: boolean
+  // esgotado hoje: continua no cardápio, mas riscado e sem poder pedir
+  esgotado: boolean
   ordem: number
   foto_url: string | null
   criado_em: string

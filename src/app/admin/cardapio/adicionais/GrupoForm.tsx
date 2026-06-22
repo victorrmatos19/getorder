@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import Spinner from '@/components/Spinner'
+import { fmt } from '@/lib/formatters'
 import { uid } from '@/lib/uid'
 import type { GrupoAdicional, SelecaoAdicional } from '@/types'
 import type { SalvarGrupoInput, OpcaoInput } from '@/lib/hooks/useAdicionais'
@@ -40,7 +41,7 @@ export default function GrupoForm({ initial, onSubmit, onClose, busy }: Props) {
       key: a.id,
       id: a.id,
       nome: a.nome,
-      preco: a.preco ? String(a.preco).replace('.', ',') : '',
+      preco: a.preco ? fmt.money(a.preco) : '',
       disponivel: a.disponivel,
       ordem: String(a.ordem),
     })),
@@ -84,7 +85,7 @@ export default function GrupoForm({ initial, onSubmit, onClose, busy }: Props) {
     // Monta as opções
     const opcoesInput: OpcaoInput[] = []
     for (const o of limpas) {
-      const precoNum = o.preco.trim() ? parseFloat(o.preco.replace(',', '.')) : 0
+      const precoNum = fmt.moneyParse(o.preco)
       if (!Number.isFinite(precoNum) || precoNum < 0) {
         setErr(`Preço inválido em "${o.nome.trim()}".`); return
       }
@@ -243,9 +244,9 @@ export default function GrupoForm({ initial, onSubmit, onClose, busy }: Props) {
                   <span className="text-xs" style={{ color: 'var(--text-mid)' }}>R$</span>
                   <input
                     value={o.preco}
-                    onChange={(e) => setOpcao(o.key, { preco: e.target.value.replace(/[^0-9,.]/g, '') })}
+                    onChange={(e) => setOpcao(o.key, { preco: fmt.moneyMask(e.target.value) })}
                     placeholder="0,00"
-                    inputMode="decimal"
+                    inputMode="numeric"
                     className="py-2 text-sm mono-num"
                     style={{ ...inputStyle, width: 80 }}
                   />

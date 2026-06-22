@@ -58,7 +58,7 @@ export default function CheckoutModal({
   const total = subtotal + servico
   const valorPorPessoa = numeroPessoas > 0 ? Math.round((total / numeroPessoas) * 100) / 100 : total
 
-  const recebidoNum = parseFloat(recebido.replace(',', '.')) || 0
+  const recebidoNum = fmt.moneyParse(recebido)
   const troco = method === 'dinheiro' ? Math.max(0, recebidoNum - total) : 0
   const podeConfirmar = !!method && !busy && (method !== 'dinheiro' || recebidoNum >= total)
 
@@ -386,9 +386,9 @@ export default function CheckoutModal({
             </label>
             <input
               value={recebido}
-              onChange={(e) => setRecebido(e.target.value.replace(/[^0-9,.]/g, ''))}
+              onChange={(e) => setRecebido(fmt.moneyMask(e.target.value))}
               placeholder="0,00"
-              inputMode="decimal"
+              inputMode="numeric"
               className="w-full text-lg font-bold mono-num py-3"
               style={{
                 border: 'none',
