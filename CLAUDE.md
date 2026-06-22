@@ -50,6 +50,8 @@ src/
 │   ├── mesa/[id]/              ← rota pública (cliente)
 │   ├── cozinha/                ← protegida (cozinha/admin)
 │   ├── garcom/                 ← protegida (garcom/admin)
+│   │   ├── nova-comanda/        ← garçom: escolher mesa livre p/ nova comanda
+│   │   ├── pedido/              ← garçom: lançar pedido (mesa nova OU comanda existente)
 │   │   └── comanda/[id]/
 │   ├── admin/                  ← protegida (admin)
 │   │   ├── cardapio/
@@ -82,10 +84,12 @@ src/
 │   │   ├── useAdicionais.ts        ← grupos + opções (admin)
 │   │   ├── useProdutoGrupos.ts     ← vínculos produto↔grupo (admin)
 │   │   ├── useProdutoOpcoes.ts     ← opções de um produto (cliente)
+│   │   ├── useCozinhaAlerta.ts     ← som (Web Audio) + mudo + Wake Lock (cozinha)
 │   │   └── useRestaurante.ts
 │   ├── calcComanda.ts          ← subtotalItem / totalComanda (fonte única de total)
 │   ├── itensPedido.ts          ← wrapper da RPC criar_item_pedido
-│   └── formatters.ts
+│   ├── lancarPedidoGarcom.ts   ← wrapper da RPC lancar_pedido_garcom (lançamento pelo garçom)
+│   └── formatters.ts           ← fmt.currency/money/moneyMask/moneyParse, cpf, time…
 ├── types/
 │   └── index.ts
 └── middleware.ts
@@ -198,7 +202,8 @@ produtos (
   em_oferta boolean,
   novidade boolean,
   destaque_ordem integer DEFAULT 999,
-  disponivel boolean,
+  disponivel boolean,                   -- false = SOME do cardápio (indisponível)
+  esgotado boolean DEFAULT false,       -- true = fica no cardápio, RISCADO, sem poder pedir (migration 012)
   ordem integer,
   foto_url text,
   criado_em timestamptz
@@ -285,7 +290,8 @@ itens_pedido_adicionais (             -- snapshot imutável dos adicionais escol
 ⚠️ **O cliente NUNCA insere direto em `itens_pedido`.** Todo item criado pelo fluxo
 de `/mesa/[id]` passa pela função `criar_item_pedido(p_comanda_id, p_produto_id,
 p_quantidade, p_observacao, p_adicional_ids[])` (`SECURITY DEFINER`). Ela:
-- resolve o `restaurante_id` a partir da comanda e valida comanda aberta + produto disponível;
+- resolve o `restaurante_id` a partir da comanda e valida comanda aberta + produto disponível
+  **e não esgotado** (recusa com `'Produto esgotado'` — migration 012);
 - **anti-tampering**: cada `adicional_id` precisa pertencer a um grupo **ativo** vinculado ao
   produto, do mesmo restaurante, e estar disponível;
 - valida as regras de cada grupo (obrigatório / min / max / única);
@@ -293,11 +299,27 @@ p_quantidade, p_observacao, p_adicional_ids[])` (`SECURITY DEFINER`). Ela:
   adicional (`nome_snapshot`, `preco_snapshot`, `grupo_nome_snapshot`) lendo o preço **real**
   do banco — o frontend só envia os **IDs**, nunca preço.
 
-O gatilho `itens_pedido_horario_guard` continua valendo (a RPC roda como anônimo no JWT, então
-bloqueia pedido em pausa/fora de horário). Wrapper tipado em `lib/itensPedido.ts`.
+O gatilho `itens_pedido_horario_guard` continua valendo, **mas só bloqueia quando `auth.uid()` é
+nulo** (cliente anônimo): `if new.status = 'novo' and auth.uid() is null then can_place_order(...)`.
+Logo o cliente fica gated por pausa/fora de horário; **o staff autenticado (garçom) NÃO** — pode
+lançar pedido manual mesmo com pedidos pausados (balcão/telefone). Wrapper tipado em `lib/itensPedido.ts`.
 
 > ⚠️ Limitação conhecida: a RPC faz snapshot de `produtos.preco`, **ignorando** `em_oferta`/
 > `oferta_preco`. Ofertas hoje são só display no card; não incidem no pedido.
+
+### RPC `lancar_pedido_garcom` (lançamento manual pelo garçom — migration 013)
+
+O garçom lança pedidos pela tela de staff (atendimento na mesa, balcão/telefone) via
+`lancar_pedido_garcom(p_comanda_id, p_mesa_id, p_itens jsonb) RETURNS uuid` (`SECURITY DEFINER`,
+transacional). Ela:
+- resolve o `restaurante_id` via `auth_restaurante_id()` e exige papel `admin`/`garcom`;
+- **find-or-create da comanda 'aberta' da mesa** (modelo mesa fixa) quando recebe `p_mesa_id`; ou
+  usa `p_comanda_id` (valida tenant + `status='aberta'`);
+- para cada item de `p_itens` (`{produto_id, quantidade, observacao, adicionais:[uuid…]}`) chama a
+  `criar_item_pedido` existente (preço/validação/snapshot no servidor) — **uma transação**, erro =
+  rollback total; retorna o id da comanda.
+- Sem policy nova: o garçom já lê `mesas` (público) e `comandas` do tenant; a escrita é via
+  SECURITY DEFINER. Wrapper tipado em `lib/lancarPedidoGarcom.ts` (frontend só manda IDs).
 
 ### RLS — Row Level Security
 
@@ -391,7 +413,7 @@ useEffect(() => {
 | Rota | Roles permitidos |
 |---|---|
 | `/cozinha` | admin, cozinha |
-| `/garcom`, `/garcom/comanda/[id]` | admin, garcom |
+| `/garcom`, `/garcom/comanda/[id]`, `/garcom/nova-comanda`, `/garcom/pedido` | admin, garcom |
 | `/admin/*` | admin |
 | `/super-admin/*` | super_admin |
 
@@ -460,7 +482,8 @@ exibidas normalmente.
 
 ```
 1. Tema escuro obrigatório (fundo --primary-dk)
-2. 3 abas: Novos | Preparando | Prontos
+2. KANBAN: as 3 colunas Novos | Preparando | Prontos visíveis AO MESMO TEMPO (cada
+   uma com scroll próprio) — não são mais abas que trocam (paisagem/tablet)
 3. Query: itens_pedido JOIN produtos JOIN comandas JOIN mesas + itens_pedido_adicionais (nested)
    WHERE status IN ('novo','em_preparo','pronto')
 4. Cards mostram: mesa/quadra, itens com ADICIONAIS e OBSERVAÇÃO em destaque (peso 700, terracota)
@@ -468,9 +491,18 @@ exibidas normalmente.
 6. Botões transitam status:
    novo → em_preparo → pronto → entregue (some)
 7. Realtime ativo
+8. ALERTA SONORO (hook useCozinhaAlerta): toca um chime sintetizado (Web Audio) SÓ em
+   INSERT de itens_pedido (pedido novo), com debounce (vários itens do mesmo pedido = 1 toque).
+   - Autoplay: precisa de gesto p/ liberar o áudio (botão "🔔 Ativar som" no header, ou 1º toque);
+     depois um toggle de mudo (🔔/🔕) persiste em localStorage (`cozinha_som_mudo`).
+   - Wake Lock mantém a tela acesa (re-adquire ao voltar o foco); degrada onde não há suporte.
+   - Indicador de conexão realtime no header (🟢 Ao vivo / 🟠 Reconectando / 🔴 Sem conexão).
 ```
 
 **⚠️ Observações em destaque:** na cozinha, o campo `obs` (e os adicionais escolhidos) deve ser exibido em peso 700, cor --accent. Operador NÃO pode perder isso.
+
+**⚠️ Som só em INSERT:** o alerta dispara **apenas** quando chega item novo (evento INSERT do
+Realtime); UPDATE (mover card) e a carga inicial (useQuery) **não** tocam.
 
 ### 3. Garçom (/garcom)
 
@@ -480,8 +512,24 @@ exibidas normalmente.
    - Quadra 2 (2 comandas)
      · Ana Paula · R$ 96,00
      · Rafael M. · R$ 54,00
-3. Badge de urgência se algum item está 'pronto'
-4. Card amarelo se tem entrega pendente, verde se ok
+3. Card INTEIRO VERDE (texto branco) quando há item 'pronto' para entregar (chamativo);
+   visual neutro (creme) quando não há nada pronto. Badge "N prontos" claro sobre o verde.
+4. Header tem botão "Nova comanda" (→ /garcom/nova-comanda) para o garçom lançar pedido.
+```
+
+### 3b. Garçom lança pedido (/garcom/nova-comanda e /garcom/pedido)
+
+```
+- /garcom/nova-comanda → lista as mesas ATIVAS sem comanda aberta (busca + 3 estados);
+  toque → /garcom/pedido?mesa=<id>
+- /garcom/pedido?mesa=<id>  (mesa nova) OU ?comanda=<id> (comanda existente):
+  · busca + chips de categoria; reaproveita ProductCard (trata esgotado) e ProdutoDetalhe
+    (bottom-sheet de adicionais obrigatórios/opcionais + obs + quantidade); carrinho LOCAL.
+  · "Lançar pedido" → lancar_pedido_garcom (1 transação, só IDs) → router.push p/
+    /garcom/comanda/<id> + toast "Pedido lançado para a cozinha". Erro mantém o carrinho.
+- /garcom/comanda/[id] → botão "Novo pedido" no rodapé (→ /garcom/pedido?comanda=<id>).
+- A comanda só é criada/efetivada no "Lançar pedido" (find-or-create) — evita comanda-zumbi.
+- O layout /garcom (src/app/garcom/layout.tsx) provê RestauranteProvider (tenant) para essas telas.
 ```
 
 ### 4. Comanda detalhada (/garcom/comanda/[id])
@@ -505,8 +553,10 @@ exibidas normalmente.
 
 ```
 - /admin                     → Dashboard: faturamento dia, pedidos, produto top, mesa top, gráfico por hora
-- /admin/cardapio            → CRUD produtos + categorias, toggle disponível, upload de foto;
-                               no editor de produto: seção "Adicionais e opções" (vincular grupos)
+- /admin/cardapio            → CRUD produtos + categorias, toggle disponível + toggle "Esgotado",
+                               upload de foto; no editor: seção "Adicionais e opções" (vincular grupos)
+                               e checkbox "Esgotado (sem estoque hoje)"; inputs de preço com
+                               máscara de moeda (R$) — ver "Formatação"
 - /admin/cardapio/adicionais → CRUD de grupos de adicionais reutilizáveis + suas opções
 - /admin/mesas               → CRUD mesas, gerar QR Code com qrcode.react
 - /admin/configuracoes       → Taxa, horário, pausa de pedidos
@@ -589,7 +639,9 @@ Lib: **Serwist** (`@serwist/next` + `serwist`), sucessor mantido do `next-pwa`.
   (iOS: "Adicionar à Tela de Início" funciona mesmo em HTTP, mas Android/instalação precisa do SW.)
 - Instalabilidade é **por origem** (manifesto global no root layout); o controle "só staff" é da
   **UI** (`InstallPrompt`), não do manifesto.
-- **Fora de escopo nesta fase:** som de pedido novo, Web Push, wake lock, offline de dados (roadmap).
+- ✅ **Som de pedido novo e Wake Lock JÁ implementados** na cozinha (hook `useCozinhaAlerta`) — são
+  client-side (Web Audio / Screen Wake Lock), independentes do service worker.
+- **Ainda fora de escopo:** Web Push, offline de dados (roadmap).
 
 ---
 
@@ -656,6 +708,8 @@ npm run db:status    # mostra URLs e chaves locais
   - `009_force_tenant_on_write.sql` — trigger que carimba `restaurante_id` nas escritas de admin.
   - `010_storage_policies.sql` — policies do bucket `produtos` (upload de foto).
   - `011_restaurantes_admin_update.sql` — admin salva configs do próprio restaurante; protege `slug`/`ativo`.
+  - `012_add_produto_esgotado.sql` — coluna `produtos.esgotado` + guarda `'Produto esgotado'` na RPC `criar_item_pedido`.
+  - `013_lancar_pedido_garcom.sql` — RPC `lancar_pedido_garcom` (lançamento manual pelo garçom).
 - `supabase/seed.sql` = dump dos **dados do PRD** (public + auth). **Gitignored** (dados reais +
   hashes). Para recriá-lo: `npx supabase db dump --linked --data-only -f supabase/seed.sql`.
 
@@ -665,9 +719,18 @@ npx supabase migration new minha_mudanca   # cria SQL em supabase/migrations/
 npm run db:reset                            # testa local
 npm run db:push                             # aplica no PRD (supabase db push)
 ```
-> ✅ **Histórico do PRD já reconciliado** (baseline + 008–011 marcados como aplicados via
-> `migration repair`). Daqui pra frente, mudança de banco é **sempre** `migration new` →
-> `db:reset` (testa local) → `db:push`. **Não** rodar mais SQL na mão no PRD.
+> ✅ **Histórico do PRD reconciliado**: as antigas 001–007 foram marcadas `reverted` no remoto via
+> `migration repair` (existem só em `migrations_archive/`); baseline + 008–013 são o histórico ativo.
+> Daqui pra frente, mudança de banco é **sempre** `migration new` → `db:reset` (testa local) →
+> `db:push`. **Não** rodar mais SQL na mão no PRD.
+>
+> ⚠️ **db:push após mexer nas migrations:** se o `db push` reclamar de "Remote migration versions not
+> found", rode `npx supabase migration repair --status reverted <versões>` (bookkeeping, não altera
+> schema) e repita o `db:push`.
+
+> 🔑 **Login local nas telas de staff:** o seed traz hashes do PRD; antes de logar local, resetar as
+> senhas: `update auth.users set encrypted_password = crypt('Teste1234', gen_salt('bf'));` e entrar
+> com `Teste1234` (o `db:reset` recarrega o seed e zera isso — só no LOCAL, nunca no PRD).
 
 ---
 
@@ -720,12 +783,18 @@ Toda lista deve tratar:
 Sempre usar helpers de `lib/formatters.ts`:
 
 ```typescript
-fmt.currency(v)   // R$ 18,00
-fmt.cpf(v)        // 123.456.789-00
-fmt.cpfMask(v)    // máscara dinâmica em input
-fmt.time(v)       // 19h32
-fmt.elapsed(v)    // 12min, 1h05min
+fmt.currency(v)        // R$ 18,00 (com símbolo)
+fmt.money(v)           // 1.850,00 (número → string, sem símbolo; p/ valor inicial de input)
+fmt.moneyMask(raw)     // input cru → máscara em centavos (digita "1850" → "18,50") — onChange
+fmt.moneyParse(masked) // string mascarada → número (robusto a milhar/vírgula) — no submit
+fmt.cpf(v)             // 123.456.789-00
+fmt.cpfMask(v)         // máscara dinâmica em input
+fmt.time(v)            // 19h32
+fmt.elapsed(v)         // 12min, 1h05min
 ```
+> 💰 **Inputs de dinheiro** (preço, oferta, adicional, "valor recebido"): SEMPRE auto-máscara em
+> centavos via `fmt.moneyMask` no `onChange` e `fmt.moneyParse` no submit (nunca `parseFloat` cru —
+> quebra com separador de milhar). A taxa de serviço é **percentual**, não usa essa máscara.
 
 ### Cálculo de total — SEMPRE via `lib/calcComanda.ts`
 
@@ -767,20 +836,29 @@ Itens legados (sem `preco_base_snapshot`) caem no fallback `produto.preco`.
 - [x] Cálculo de total centralizado em `lib/calcComanda.ts` (cliente, garçom e checkout)
 - [x] PWA instalável na área do staff (Serwist): manifesto standalone, SW conservador
       (dados sempre da rede), ícones, convite de instalação restrito ao staff — ver "PWA"
+- [x] Cozinha em KANBAN (3 colunas simultâneas) + ALERTA SONORO de pedido novo (Web Audio,
+      só em INSERT, debounce, mudo persistido), Wake Lock e indicador de conexão realtime
+- [x] Garçom: card inteiro verde quando há item pronto para entregar (texto branco)
+- [x] Produto "esgotado hoje" (migration 012): flag separado de `disponivel`; fica no cardápio
+      riscado/bloqueado; toggle no admin; guarda na RPC `criar_item_pedido`
+- [x] Máscara de moeda (R$) em todos os inputs de preço (`fmt.money/moneyMask/moneyParse`)
+- [x] Garçom lança pedido pela tela de staff (migration 013): /garcom/nova-comanda + /garcom/pedido,
+      RPC transacional `lancar_pedido_garcom` (reaproveita `criar_item_pedido`)
 
 ## ⏳ Gaps conhecidos (roadmap)
 
 ### Antes de escalar (críticos)
 - [ ] Integração NFC-e (Focus NFe, NFe.io)
 - [ ] Impressora térmica na cozinha (ESC/POS)
-- [ ] Som ao chegar pedido novo (próxima fase sobre a PWA do staff)
+- [x] ~~Som ao chegar pedido novo~~ — feito (hook `useCozinhaAlerta`; ver Cozinha)
 - [ ] Cobrança recorrente (Asaas/Stripe)
 - [ ] Onboarding self-service + landing page
 - [ ] Testes E2E (Playwright)
 
 ### Operacional
 - [ ] Ofertas valendo no pedido (RPC honrar em_oferta/oferta_preco no snapshot)
-- [ ] Estoque básico (produto "esgotado hoje")
+- [x] ~~Estoque básico (produto "esgotado hoje")~~ — feito (migration 012)
+- [ ] Toggle de favorito/"Mais pedidos" na tela do garçom (deixado fora do v1 do lançamento manual)
 - [ ] Edição de pedido após enviar
 - [ ] Divisão por itens (não só igual)
 - [ ] Notificações Web Push pra garçom (sobre a PWA do staff)
@@ -814,6 +892,9 @@ Itens legados (sem `preco_base_snapshot`) caem no fallback `produto.preco`.
 - ❌ Não esquecer guards de race condition em UPDATEs críticos (ex: cancelamento de item precisa de `WHERE status='novo'`)
 - ❌ Não enviar preço de adicional/produto pelo client — só os IDs; o preço é snapshot no servidor
 - ❌ Não inserir direto em `itens_pedido` no fluxo do cliente — usar SEMPRE a RPC `criar_item_pedido`
+- ❌ Não lançar pedido do garçom inserindo na mão — usar a RPC `lancar_pedido_garcom` (`lib/lancarPedidoGarcom.ts`)
+- ❌ Não usar `parseFloat` cru em input de dinheiro — usar `fmt.moneyMask` (onChange) e `fmt.moneyParse` (submit)
+- ❌ Não confundir `esgotado` com `disponivel`: `disponivel=false` SOME do cardápio; `esgotado=true` fica visível riscado e bloqueado
 - ❌ Não somar total de comanda na mão — usar `subtotalItem`/`totalComanda` de `lib/calcComanda.ts`
 - ❌ Não **escopar por tenant a leitura do cardápio** (`produtos/categorias/mesas/restaurantes/…`) —
   o `/mesa/[id]` é público; escopar quebra o cliente logado em outro tenant ("Mesa indisponível").
@@ -854,7 +935,8 @@ Quando o usuário pedir nova funcionalidade:
 
 ---
 
-**Última atualização:** Junho de 2026 (PWA instalável na área do staff via Serwist; hardening
-multi-tenant: migrations 008–011, onboarding de
-restaurante novo, isolamento cardápio/vendas)
-**Versão do produto:** 0.3.0 — MVP em produção (modo mesa fixa + adicionais estruturados)
+**Última atualização:** Junho de 2026 — cozinha em kanban + alerta sonoro/Wake Lock/indicador de
+conexão (migration —, hook `useCozinhaAlerta`); garçom card verde quando há item pronto; produto
+"esgotado hoje" (migration 012); máscara de moeda nos inputs de preço; garçom lança pedido pela
+tela de staff (migration 013, RPC `lancar_pedido_garcom`). Migrations 001–007 arquivadas.
+**Versão do produto:** 0.4.0 — MVP em produção (modo mesa fixa + adicionais + esgotado + lançamento pelo garçom)
