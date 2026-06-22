@@ -1,6 +1,6 @@
 'use client'
 
-import { memo, useEffect, useMemo, useState } from 'react'
+import { memo, useEffect, useMemo, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { createClient } from '@/lib/supabase/client'
 import StaffHeader from '@/components/StaffHeader'
@@ -8,8 +8,11 @@ import EmptyState from '@/components/EmptyState'
 import Spinner from '@/components/Spinner'
 import Toast from '@/components/Toast'
 import { useItensCozinha } from '@/lib/hooks/useItens'
+import { useCozinhaAlerta } from '@/lib/hooks/useCozinhaAlerta'
 import { fmt } from '@/lib/formatters'
 import type { ItemPedido, ItemStatus } from '@/types'
+
+type ConexaoStatus = 'conectando' | 'ao_vivo' | 'reconectando' | 'sem_conexao'
 
 // Agrupa os adicionais do item por grupo (grupo_nome_snapshot), preservando a
 // ordem, em UPPER CASE — para a cozinha não perder ponto da carne nem "sem X".
@@ -60,6 +63,30 @@ const Relogio = memo(function Relogio() {
   return <>{hora}</>
 })
 
+const CONEXAO_CFG: Record<ConexaoStatus, { cor: string; label: string }> = {
+  conectando:   { cor: 'rgba(250,249,245,0.45)', label: 'Conectando' },
+  ao_vivo:      { cor: '#567D4F', label: 'Ao vivo' },
+  reconectando: { cor: '#C8871E', label: 'Reconectando' },
+  sem_conexao:  { cor: '#C56B56', label: 'Sem conexão' },
+}
+
+function ConexaoBadge({ status }: { status: ConexaoStatus }) {
+  const cfg = CONEXAO_CFG[status]
+  return (
+    <span
+      className="flex items-center gap-1.5 text-xs"
+      style={{ color: 'rgba(250,249,245,0.62)' }}
+      title={`Conexão em tempo real: ${cfg.label}`}
+    >
+      <span
+        className="inline-block w-2 h-2 rounded-full shrink-0"
+        style={{ background: cfg.cor }}
+      />
+      <span className="hidden sm:inline">{cfg.label}</span>
+    </span>
+  )
+}
+
 type Group = {
   key: string
   mesa: string
@@ -72,26 +99,52 @@ export default function CozinhaPanel() {
   const qc = useQueryClient()
   const [toast, setToast] = useState({ visible: false, message: '' })
   const [busyId, setBusyId] = useState<string | null>(null)
+  const [conexao, setConexao] = useState<ConexaoStatus>('conectando')
 
   const { data: itens = [], isLoading, isError, error, refetch } = useItensCozinha()
+  const { armado, mudo, armar, alternarMudo, tocar } = useCozinhaAlerta()
 
-  // Realtime
+  // Debounce: vários itens do mesmo pedido (INSERTs em sequência) = um toque só.
+  const tocarRef = useRef(tocar)
+  tocarRef.current = tocar
+  const alertaTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Realtime: invalida em qualquer evento; toca alerta SÓ em INSERT (pedido novo).
   useEffect(() => {
     const supabase = createClient()
+    const agendarAlerta = () => {
+      if (alertaTimer.current) clearTimeout(alertaTimer.current)
+      alertaTimer.current = setTimeout(() => tocarRef.current(), 1500)
+    }
     const ch = supabase
       .channel('cozinha-orders')
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'itens_pedido' },
-        () => {
+        (payload) => {
           qc.invalidateQueries({ queryKey: ['itens', 'cozinha'] })
+          if (payload.eventType === 'INSERT') agendarAlerta()
         },
       )
-      .subscribe()
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') setConexao('ao_vivo')
+        else if (status === 'CHANNEL_ERROR') setConexao('sem_conexao')
+        else if (status === 'TIMED_OUT' || status === 'CLOSED') setConexao('reconectando')
+      })
     return () => {
+      if (alertaTimer.current) clearTimeout(alertaTimer.current)
       supabase.removeChannel(ch)
     }
   }, [qc])
+
+  // Fallback de autoplay: o primeiro toque/clique em qualquer lugar arma o áudio
+  // (além do botão "Ativar som" explícito no header).
+  useEffect(() => {
+    if (armado) return
+    const onFirst = () => void armar()
+    window.addEventListener('pointerdown', onFirst, { once: true })
+    return () => window.removeEventListener('pointerdown', onFirst)
+  }, [armado, armar])
 
   // Agrupar por comanda dentro de cada status (uma lista por coluna do kanban)
   const colunas = useMemo(() => {
@@ -154,6 +207,35 @@ export default function CozinhaPanel() {
         variant="dark"
         subtitle="Cozinha · GetOrder"
         title={<Relogio />}
+        rightSlot={
+          <div className="flex items-center gap-2">
+            <ConexaoBadge status={conexao} />
+            {!armado ? (
+              <button
+                onClick={() => void armar()}
+                className="text-xs font-bold rounded-lg px-3 flex items-center gap-1.5"
+                style={{ minHeight: 40, background: 'var(--accent)', color: '#FAF9F5', border: 'none' }}
+              >
+                🔔 Ativar som
+              </button>
+            ) : (
+              <button
+                onClick={alternarMudo}
+                aria-label={mudo ? 'Ativar som' : 'Silenciar'}
+                className="text-base rounded-lg px-3 flex items-center justify-center"
+                style={{
+                  minWidth: 44,
+                  minHeight: 40,
+                  background: 'transparent',
+                  color: mudo ? 'rgba(250,249,245,0.45)' : '#F2F0E8',
+                  border: '1px solid rgba(255,255,255,0.15)',
+                }}
+              >
+                {mudo ? '🔕' : '🔔'}
+              </button>
+            )}
+          </div>
+        }
       />
 
       {isError && (
