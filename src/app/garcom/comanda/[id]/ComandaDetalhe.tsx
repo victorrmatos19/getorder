@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { useEffect, useMemo, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { useQueryClient } from '@tanstack/react-query'
 import { createClient } from '@/lib/supabase/client'
 import EmptyState from '@/components/EmptyState'
@@ -18,9 +18,18 @@ import type { ItemPedido } from '@/types'
 
 export default function ComandaDetalhe({ comandaId }: { comandaId: string }) {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const qc = useQueryClient()
   const [checkoutOpen, setCheckoutOpen] = useState(false)
   const [toast, setToast] = useState({ visible: false, message: '' })
+
+  // Toast "Pedido lançado para a cozinha" ao voltar do lançamento (?lancado=1)
+  useEffect(() => {
+    if (searchParams.get('lancado') === '1') {
+      setToast({ visible: true, message: 'Pedido lançado para a cozinha' })
+      router.replace(`/garcom/comanda/${comandaId}`)
+    }
+  }, [searchParams, comandaId, router])
   const [entregando, setEntregando] = useState(false)
   const [entregandoId, setEntregandoId] = useState<string | null>(null)
   const [confirmingCancelId, setConfirmingCancelId] = useState<string | null>(null)
@@ -341,44 +350,56 @@ export default function ComandaDetalhe({ comandaId }: { comandaId: string }) {
             Comanda já encerrada
           </div>
         ) : (
-          <div className="flex gap-2">
-            {prontos.length > 0 && (
+          <div className="flex flex-col gap-2">
+            <Link
+              href={`/garcom/pedido?comanda=${comandaId}`}
+              className="w-full rounded-xl text-sm font-bold flex items-center justify-center gap-2"
+              style={{ minHeight: 52, background: 'var(--primary)', color: '#FAF9F5', border: 'none' }}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                <path d="M12 5v14M5 12h14" />
+              </svg>
+              Novo pedido
+            </Link>
+            <div className="flex gap-2">
+              {prontos.length > 0 && (
+                <button
+                  onClick={entregarTodos}
+                  disabled={entregando}
+                  className="flex-1 rounded-xl text-sm font-bold flex items-center justify-center gap-2"
+                  style={{
+                    minHeight: 52,
+                    background: 'transparent',
+                    color: 'var(--status-ready)',
+                    border: '1px solid var(--status-ready)',
+                  }}
+                >
+                  {entregando ? (
+                    <Spinner size={14} color="var(--status-ready)" />
+                  ) : (
+                    <>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M5 12l5 5 9-11" />
+                      </svg>
+                      Entregar ({prontos.length})
+                    </>
+                  )}
+                </button>
+              )}
               <button
-                onClick={entregarTodos}
-                disabled={entregando}
-                className="flex-1 rounded-xl text-sm font-bold flex items-center justify-center gap-2"
+                onClick={() => setCheckoutOpen(true)}
+                className="rounded-xl text-sm font-bold"
                 style={{
+                  flex: prontos.length > 0 ? 2 : 1,
                   minHeight: 52,
-                  background: 'transparent',
-                  color: 'var(--status-ready)',
-                  border: '1px solid var(--status-ready)',
+                  background: 'var(--accent)',
+                  color: '#FAF9F5',
+                  border: 'none',
                 }}
               >
-                {entregando ? (
-                  <Spinner size={14} color="var(--status-ready)" />
-                ) : (
-                  <>
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M5 12l5 5 9-11" />
-                    </svg>
-                    Entregar ({prontos.length})
-                  </>
-                )}
+                Encerrar e Cobrar
               </button>
-            )}
-            <button
-              onClick={() => setCheckoutOpen(true)}
-              className="rounded-xl text-sm font-bold"
-              style={{
-                flex: prontos.length > 0 ? 2 : 1,
-                minHeight: 52,
-                background: 'var(--accent)',
-                color: '#FAF9F5',
-                border: 'none',
-              }}
-            >
-              Encerrar e Cobrar
-            </button>
+            </div>
           </div>
         )}
       </div>
