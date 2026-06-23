@@ -14,6 +14,7 @@ import { fmt } from '@/lib/formatters'
 import { subtotalItem, totalComanda } from '@/lib/calcComanda'
 import { useComanda } from '@/lib/hooks/useComanda'
 import { useItensComanda } from '@/lib/hooks/useItens'
+import { cancelarComandaVazia } from '@/lib/cancelarComandaVazia'
 import type { ItemPedido } from '@/types'
 
 export default function ComandaDetalhe({ comandaId }: { comandaId: string }) {
@@ -33,6 +34,20 @@ export default function ComandaDetalhe({ comandaId }: { comandaId: string }) {
   const [entregando, setEntregando] = useState(false)
   const [entregandoId, setEntregandoId] = useState<string | null>(null)
   const [confirmingCancelId, setConfirmingCancelId] = useState<string | null>(null)
+  const [cancelandoComanda, setCancelandoComanda] = useState(false)
+
+  const cancelarComanda = async () => {
+    if (cancelandoComanda) return
+    setCancelandoComanda(true)
+    try {
+      await cancelarComandaVazia(comandaId)
+      setToast({ visible: true, message: 'Comanda cancelada' })
+      setTimeout(() => router.push('/garcom'), 900)
+    } catch (e: any) {
+      setCancelandoComanda(false)
+      setToast({ visible: true, message: e.message || 'Erro ao cancelar a comanda.' })
+    }
+  }
 
   const comandaQ = useComanda(comandaId)
   const itensQ = useItensComanda(comandaId)
@@ -149,6 +164,7 @@ export default function ComandaDetalhe({ comandaId }: { comandaId: string }) {
   const comanda = comandaQ.data as any
   const mesa = comanda.mesa
   const isFechada = comanda.status === 'fechada'
+  const vazia = !itensQ.isLoading && (itensQ.data ?? []).length === 0
 
   return (
     <div className="min-h-screen flex flex-col relative" style={{ background: 'var(--bg)' }}>
@@ -361,45 +377,62 @@ export default function ComandaDetalhe({ comandaId }: { comandaId: string }) {
               </svg>
               Novo pedido
             </Link>
-            <div className="flex gap-2">
-              {prontos.length > 0 && (
-                <button
-                  onClick={entregarTodos}
-                  disabled={entregando}
-                  className="flex-1 rounded-xl text-sm font-bold flex items-center justify-center gap-2"
-                  style={{
-                    minHeight: 52,
-                    background: 'transparent',
-                    color: 'var(--status-ready)',
-                    border: '1px solid var(--status-ready)',
-                  }}
-                >
-                  {entregando ? (
-                    <Spinner size={14} color="var(--status-ready)" />
-                  ) : (
-                    <>
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M5 12l5 5 9-11" />
-                      </svg>
-                      Entregar ({prontos.length})
-                    </>
-                  )}
-                </button>
-              )}
+            {vazia ? (
               <button
-                onClick={() => setCheckoutOpen(true)}
-                className="rounded-xl text-sm font-bold"
+                onClick={cancelarComanda}
+                disabled={cancelandoComanda}
+                className="w-full rounded-xl text-sm font-bold flex items-center justify-center gap-2"
                 style={{
-                  flex: prontos.length > 0 ? 2 : 1,
                   minHeight: 52,
-                  background: 'var(--accent)',
-                  color: '#FAF9F5',
-                  border: 'none',
+                  background: 'transparent',
+                  color: 'var(--accent)',
+                  border: '1px solid var(--accent)',
+                  cursor: cancelandoComanda ? 'not-allowed' : 'pointer',
                 }}
               >
-                Encerrar e Cobrar
+                {cancelandoComanda ? <Spinner size={14} color="var(--accent)" /> : 'Cancelar comanda vazia'}
               </button>
-            </div>
+            ) : (
+              <div className="flex gap-2">
+                {prontos.length > 0 && (
+                  <button
+                    onClick={entregarTodos}
+                    disabled={entregando}
+                    className="flex-1 rounded-xl text-sm font-bold flex items-center justify-center gap-2"
+                    style={{
+                      minHeight: 52,
+                      background: 'transparent',
+                      color: 'var(--status-ready)',
+                      border: '1px solid var(--status-ready)',
+                    }}
+                  >
+                    {entregando ? (
+                      <Spinner size={14} color="var(--status-ready)" />
+                    ) : (
+                      <>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M5 12l5 5 9-11" />
+                        </svg>
+                        Entregar ({prontos.length})
+                      </>
+                    )}
+                  </button>
+                )}
+                <button
+                  onClick={() => setCheckoutOpen(true)}
+                  className="rounded-xl text-sm font-bold"
+                  style={{
+                    flex: prontos.length > 0 ? 2 : 1,
+                    minHeight: 52,
+                    background: 'var(--accent)',
+                    color: '#FAF9F5',
+                    border: 'none',
+                  }}
+                >
+                  Encerrar e Cobrar
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>
