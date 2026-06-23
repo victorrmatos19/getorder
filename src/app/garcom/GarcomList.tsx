@@ -70,7 +70,7 @@ export default function GarcomList() {
           <Link
             href="/garcom/nova-comanda"
             className="text-xs font-bold rounded-lg px-3 flex items-center gap-1.5"
-            style={{ minHeight: 40, background: 'var(--accent)', color: '#FAF9F5' }}
+            style={{ minHeight: 40, background: 'var(--accent)', color: 'var(--on-accent)' }}
           >
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
               <path d="M12 5v14M5 12h14" />

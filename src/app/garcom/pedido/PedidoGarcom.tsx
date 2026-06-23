@@ -199,7 +199,7 @@ export default function PedidoGarcom({ mesaId, comandaId }: Props) {
           <button
             onClick={() => setModal(true)}
             className="w-full rounded-xl flex items-center justify-between px-4 text-sm font-bold"
-            style={{ minHeight: 52, background: 'var(--accent)', color: '#FAF9F5', border: 'none' }}
+            style={{ minHeight: 52, background: 'var(--accent)', color: 'var(--on-accent)', border: 'none' }}
           >
             <span className="text-xs opacity-80">{cartCount} {cartCount === 1 ? 'item' : 'itens'}</span>
             <span>Ver pedido</span>
@@ -283,7 +283,7 @@ export default function PedidoGarcom({ mesaId, comandaId }: Props) {
                   flex: 2,
                   minHeight: 48,
                   background: submitting ? 'var(--line)' : 'var(--accent)',
-                  color: submitting ? 'var(--muted)' : '#FAF9F5',
+                  color: submitting ? 'var(--muted)' : 'var(--on-accent)',
                   border: 'none',
                   cursor: submitting ? 'not-allowed' : 'pointer',
                 }}

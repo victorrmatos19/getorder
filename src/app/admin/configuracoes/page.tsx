@@ -6,11 +6,13 @@ import { usePathname } from 'next/navigation'
 import StaffHeader from '@/components/StaffHeader'
 import GeralTab from './GeralTab'
 import HorarioTab from './HorarioTab'
+import MarcaTab from './MarcaTab'
 
-type Tab = 'geral' | 'horario' | 'mesas' | 'cardapio'
+type Tab = 'geral' | 'marca' | 'horario' | 'mesas' | 'cardapio'
 
 const TABS: { key: Tab; label: string; href?: string }[] = [
   { key: 'geral',    label: 'Geral' },
+  { key: 'marca',    label: 'Marca' },
   { key: 'horario',  label: 'Horário' },
   { key: 'mesas',    label: 'Mesas',    href: '/admin/mesas' },
   { key: 'cardapio', label: 'Cardápio', href: '/admin/cardapio' },
@@ -58,6 +60,7 @@ export default function ConfiguracoesPage() {
       </div>
 
       {tab === 'geral'   && <GeralTab />}
+      {tab === 'marca'   && <MarcaTab />}
       {tab === 'horario' && <HorarioTab />}
     </>
   )

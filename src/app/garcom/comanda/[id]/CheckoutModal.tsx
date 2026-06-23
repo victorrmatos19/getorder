@@ -416,7 +416,7 @@ export default function CheckoutModal({
             style={{
               minHeight: 52,
               background: podeConfirmar ? 'var(--accent)' : 'var(--line)',
-              color: podeConfirmar ? '#FAF9F5' : 'var(--muted)',
+              color: podeConfirmar ? 'var(--on-accent)' : 'var(--muted)',
               border: 'none',
               cursor: podeConfirmar ? 'pointer' : 'not-allowed',
             }}

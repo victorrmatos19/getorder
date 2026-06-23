@@ -2,7 +2,8 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import Logo from '@/components/Logo'
+import BrandLogo from '@/components/BrandLogo'
+import { deriveTheme } from '@/lib/theme'
 import ProductCard from '@/components/ProductCard'
 import EmptyState from '@/components/EmptyState'
 import Spinner from '@/components/Spinner'
@@ -56,6 +57,9 @@ export default function CardapioView({ mesa, comandaId, onReset }: Props) {
   const produtos = produtosQ.data ?? []
   const categorias: Categoria[] = categoriasQ.data ?? []
   const podeReceber = disponibilidadeQ.data?.podeReceber ?? true
+  const rest = disponibilidadeQ.data?.restaurante
+  // Marca do restaurante (white-label): injeta os tokens derivados no container raiz.
+  const themeVars = deriveTheme(rest?.cor_primaria, rest?.cor_accent) as React.CSSProperties
 
   const novidades = useMemo(() => produtos.filter((p) => p.novidade), [produtos])
   const ofertas   = useMemo(() => produtos.filter((p) => p.em_oferta && !p.novidade), [produtos])
@@ -148,14 +152,14 @@ export default function CardapioView({ mesa, comandaId, onReset }: Props) {
   }
 
   return (
-    <div className="min-h-screen flex flex-col relative" style={{ background: 'var(--bg)' }}>
+    <div className="min-h-screen flex flex-col relative" style={{ ...themeVars, background: 'var(--bg)' }}>
       {/* Header */}
       <div className="px-6 pt-4 pb-3 flex items-start justify-between">
         <div className="min-w-0">
           <div className="text-xs mb-1" style={{ color: 'var(--text-mid)' }}>
             {mesa.nome}{clienteNome ? ` · ${clienteNome.split(' ')[0]}` : ''}
           </div>
-          <Logo size="sm" />
+          <BrandLogo logoUrl={rest?.logo_url} nome={rest?.nome} size="sm" showCobranding />
         </div>
         <button
           onClick={onReset}
@@ -231,7 +235,7 @@ export default function CardapioView({ mesa, comandaId, onReset }: Props) {
                   style={{
                     scrollSnapAlign: 'start',
                     background: active ? (accent ? 'var(--accent)' : 'var(--ink)') : 'transparent',
-                    color: active ? '#FAF9F5' : (accent ? 'var(--accent)' : 'var(--text-mid)'),
+                    color: active ? (accent ? 'var(--on-accent)' : '#FAF9F5') : (accent ? 'var(--accent)' : 'var(--text-mid)'),
                     border: active
                       ? `1px solid ${accent ? 'var(--accent)' : 'var(--ink)'}`
                       : `1px solid ${accent ? 'var(--accent)' : 'var(--line)'}`,
@@ -285,7 +289,7 @@ export default function CardapioView({ mesa, comandaId, onReset }: Props) {
                 style={{
                   minHeight: 52,
                   background: 'var(--accent)',
-                  color: '#FAF9F5',
+                  color: 'var(--on-accent)',
                   border: 'none',
                 }}
               >
@@ -402,7 +406,7 @@ export default function CardapioView({ mesa, comandaId, onReset }: Props) {
                   flex: 2,
                   minHeight: 48,
                   background: submitting || !podeReceber ? 'var(--line)' : 'var(--accent)',
-                  color: submitting || !podeReceber ? 'var(--muted)' : '#FAF9F5',
+                  color: submitting || !podeReceber ? 'var(--muted)' : 'var(--on-accent)',
                   border: 'none',
                   cursor: submitting || !podeReceber ? 'not-allowed' : 'pointer',
                 }}
@@ -557,7 +561,7 @@ function MinhaComanda({
                         <button
                           onClick={() => { onCancelarItem(item.id); setConfirmingId(null) }}
                           className="text-xs px-2 py-1 rounded-lg"
-                          style={{ background: 'var(--accent)', color: '#FAF9F5', border: 'none' }}
+                          style={{ background: 'var(--accent)', color: 'var(--on-accent)', border: 'none' }}
                         >
                           Sim, cancelar
                         </button>
@@ -640,7 +644,7 @@ function MinhaComanda({
           style={{
             minHeight: 52,
             background: itens.length === 0 ? 'var(--line)' : 'var(--accent)',
-            color: itens.length === 0 ? 'var(--muted)' : '#FAF9F5',
+            color: itens.length === 0 ? 'var(--muted)' : 'var(--on-accent)',
             border: 'none',
             cursor: itens.length === 0 ? 'not-allowed' : 'pointer',
           }}

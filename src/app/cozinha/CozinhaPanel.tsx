@@ -9,6 +9,8 @@ import Spinner from '@/components/Spinner'
 import Toast from '@/components/Toast'
 import { useItensCozinha } from '@/lib/hooks/useItens'
 import { useCozinhaAlerta } from '@/lib/hooks/useCozinhaAlerta'
+import { useRestaurante } from '@/lib/contexts/RestauranteContext'
+import { deriveTheme } from '@/lib/theme'
 import { fmt } from '@/lib/formatters'
 import type { ItemPedido, ItemStatus } from '@/types'
 
@@ -103,6 +105,13 @@ export default function CozinhaPanel() {
 
   const { data: itens = [], isLoading, isError, error, refetch } = useItensCozinha()
   const { armado, mudo, armar, alternarMudo, tocar } = useCozinhaAlerta()
+  const { restaurante } = useRestaurante()
+  // Marca do restaurante (tema escuro): fundo cai para neutro escuro se a cor for clara.
+  const themeVars = deriveTheme(
+    restaurante?.cor_primaria,
+    restaurante?.cor_accent,
+    { dark: true },
+  ) as React.CSSProperties
 
   // Debounce: vários itens do mesmo pedido (INSERTs em sequência) = um toque só.
   const tocarRef = useRef(tocar)
@@ -202,7 +211,7 @@ export default function CozinhaPanel() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col" style={{ background: 'var(--primary-dk)', color: '#F2F0E8' }}>
+    <div className="min-h-screen flex flex-col" style={{ ...themeVars, background: 'var(--primary-dk)', color: '#F2F0E8' }}>
       <StaffHeader
         variant="dark"
         subtitle="Cozinha · GetOrder"
@@ -214,7 +223,7 @@ export default function CozinhaPanel() {
               <button
                 onClick={() => void armar()}
                 className="text-xs font-bold rounded-lg px-3 flex items-center gap-1.5"
-                style={{ minHeight: 40, background: 'var(--accent)', color: '#FAF9F5', border: 'none' }}
+                style={{ minHeight: 40, background: 'var(--accent)', color: 'var(--on-accent)', border: 'none' }}
               >
                 🔔 Ativar som
               </button>

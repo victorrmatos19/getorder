@@ -3,6 +3,8 @@ export type Restaurante = {
   nome: string
   slug: string
   logo_url: string | null
+  cor_primaria: string | null
+  cor_accent: string | null
   ativo: boolean
   taxa_servico_percentual: number
   taxa_servico_obrigatoria: boolean

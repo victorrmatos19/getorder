@@ -11,6 +11,10 @@
   --accent-dk: #7D3A2E;
   --accent-lt: #C56B56;
 
+  /* Texto legível sobre primária/accent (white-label sobrescreve por tenant via ThemeScope). */
+  --on-primary: #FAF9F5;
+  --on-accent: #FAF9F5;
+
   --bg: #FAF9F5;
   --surface: #F2F0E8;
   --line: #DDD9CC;

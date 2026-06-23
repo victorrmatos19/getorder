@@ -139,7 +139,7 @@ export default function ProdutosTab() {
                 <div className="flex gap-1 mb-0.5">
                   {p.novidade && (
                     <span className="text-[10px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider"
-                      style={{ background: 'var(--accent)', color: '#FAF9F5' }}>
+                      style={{ background: 'var(--accent)', color: 'var(--on-accent)' }}>
                       NOVO
                     </span>
                   )}

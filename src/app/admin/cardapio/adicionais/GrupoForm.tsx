@@ -309,7 +309,7 @@ export default function GrupoForm({ initial, onSubmit, onClose, busy }: Props) {
             onClick={submit}
             disabled={busy}
             className="rounded-xl text-sm font-bold flex items-center justify-center gap-2"
-            style={{ flex: 2, minHeight: 48, background: 'var(--accent)', color: '#FAF9F5', border: 'none' }}
+            style={{ flex: 2, minHeight: 48, background: 'var(--accent)', color: 'var(--on-accent)', border: 'none' }}
           >
             {busy ? <><Spinner /> Salvando</> : 'Salvar'}
           </button>

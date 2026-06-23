@@ -60,7 +60,7 @@ export default function AoVivoHoje({ restauranteId }: { restauranteId: string | 
   return (
     <div
       className="rounded-xl p-4 flex items-center justify-between"
-      style={{ background: 'var(--primary)', color: '#FAF9F5' }}
+      style={{ background: 'var(--primary)', color: 'var(--on-primary)' }}
     >
       <div className="flex items-center gap-2">
         <span className="inline-block w-2 h-2 rounded-full" style={{ background: '#9FE0A0' }} aria-hidden />

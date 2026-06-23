@@ -210,7 +210,7 @@ export default function ProdutoDetalhe({ produto, bloqueado, onClose, onAddToCar
                         }}
                       >
                         {checked && (
-                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#FAF9F5" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--on-accent)" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
                             <path d="M5 12l5 5 9-11" />
                           </svg>
                         )}
@@ -282,7 +282,7 @@ export default function ProdutoDetalhe({ produto, bloqueado, onClose, onAddToCar
           style={{
             minHeight: 52,
             background: podeAdicionar ? 'var(--accent)' : 'var(--line)',
-            color: podeAdicionar ? '#FAF9F5' : 'var(--muted)',
+            color: podeAdicionar ? 'var(--on-accent)' : 'var(--muted)',
             border: 'none',
             cursor: podeAdicionar ? 'pointer' : 'not-allowed',
           }}

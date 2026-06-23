@@ -1,16 +1,13 @@
 import ProtectedRoute from '@/components/ProtectedRoute'
 import { RestauranteProvider } from '@/lib/contexts/RestauranteContext'
 import InstallPrompt from '@/components/InstallPrompt'
-import AdminNav from './AdminNav'
+import AdminThemeScope from './AdminThemeScope'
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   return (
     <ProtectedRoute allow={['admin']}>
       <RestauranteProvider>
-        <div className="min-h-screen flex flex-col pb-20" style={{ background: 'var(--bg)' }}>
-          {children}
-          <AdminNav />
-        </div>
+        <AdminThemeScope>{children}</AdminThemeScope>
       </RestauranteProvider>
       <InstallPrompt />
     </ProtectedRoute>

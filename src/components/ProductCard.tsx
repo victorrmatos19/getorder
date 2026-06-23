@@ -34,7 +34,7 @@ export default function ProductCard({ produto, onOpen, isLast }: Props) {
             {isEsgotado && (
               <span
                 className="text-[10px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider"
-                style={{ background: 'var(--accent)', color: '#FAF9F5' }}
+                style={{ background: 'var(--accent)', color: 'var(--on-accent)' }}
               >
                 Esgotado
               </span>
@@ -42,7 +42,7 @@ export default function ProductCard({ produto, onOpen, isLast }: Props) {
             {produto.novidade && (
               <span
                 className="text-[10px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider"
-                style={{ background: 'var(--accent)', color: '#FAF9F5' }}
+                style={{ background: 'var(--accent)', color: 'var(--on-accent)' }}
               >
                 Novo
               </span>

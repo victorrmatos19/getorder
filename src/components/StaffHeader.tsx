@@ -3,7 +3,8 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import Logo from './Logo'
+import { useRestaurante } from '@/lib/contexts/RestauranteContext'
+import BrandLogo from './BrandLogo'
 
 type Props = {
   subtitle?: string
@@ -15,6 +16,7 @@ type Props = {
 
 export default function StaffHeader({ subtitle, title, variant = 'light', rightSlot, leftSlot }: Props) {
   const router = useRouter()
+  const { restaurante } = useRestaurante()
   const [email, setEmail] = useState<string | null>(null)
 
   useEffect(() => {
@@ -40,6 +42,16 @@ export default function StaffHeader({ subtitle, title, variant = 'light', rightS
       }}
     >
       {leftSlot}
+      {restaurante?.logo_url && (
+        <BrandLogo
+          logoUrl={restaurante.logo_url}
+          nome={restaurante.nome}
+          size="sm"
+          variant={isDark ? 'light' : 'dark'}
+          showCobranding
+          className="mr-3 shrink-0"
+        />
+      )}
       <div className="min-w-0 flex-1">
         {subtitle && (
           <div

@@ -279,7 +279,7 @@ export default function ComandaDetalhe({ comandaId }: { comandaId: string }) {
                         <button
                           onClick={() => { cancelarItem(it.id); setConfirmingCancelId(null) }}
                           className="text-xs px-2 py-1 rounded-lg"
-                          style={{ background: 'var(--accent)', color: '#FAF9F5', border: 'none' }}
+                          style={{ background: 'var(--accent)', color: 'var(--on-accent)', border: 'none' }}
                         >
                           Sim, cancelar
                         </button>
@@ -370,7 +370,7 @@ export default function ComandaDetalhe({ comandaId }: { comandaId: string }) {
             <Link
               href={`/garcom/pedido?comanda=${comandaId}`}
               className="w-full rounded-xl text-sm font-bold flex items-center justify-center gap-2"
-              style={{ minHeight: 52, background: 'var(--primary)', color: '#FAF9F5', border: 'none' }}
+              style={{ minHeight: 52, background: 'var(--primary)', color: 'var(--on-primary)', border: 'none' }}
             >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
                 <path d="M12 5v14M5 12h14" />
@@ -425,7 +425,7 @@ export default function ComandaDetalhe({ comandaId }: { comandaId: string }) {
                     flex: prontos.length > 0 ? 2 : 1,
                     minHeight: 52,
                     background: 'var(--accent)',
-                    color: '#FAF9F5',
+                    color: 'var(--on-accent)',
                     border: 'none',
                   }}
                 >

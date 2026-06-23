@@ -139,7 +139,7 @@ export default function GeralTab() {
         onClick={save}
         disabled={busy}
         className="w-full rounded-xl text-sm font-bold flex items-center justify-center gap-2 mt-4"
-        style={{ minHeight: 48, background: 'var(--accent)', color: '#FAF9F5', border: 'none' }}
+        style={{ minHeight: 48, background: 'var(--accent)', color: 'var(--on-accent)', border: 'none' }}
       >
         {busy ? <><Spinner /> Salvando</> : 'Salvar alterações'}
       </button>
