@@ -1,210 +1,157 @@
 'use client'
 
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import dynamic from 'next/dynamic'
-import { useQuery } from '@tanstack/react-query'
-import { createClient } from '@/lib/supabase/client'
 import StaffHeader from '@/components/StaffHeader'
 import Spinner from '@/components/Spinner'
 import EmptyState from '@/components/EmptyState'
-import StatusBadge from '@/components/StatusBadge'
-import { fmt } from '@/lib/formatters'
 import { useRestaurante } from '@/lib/contexts/RestauranteContext'
-import type { Comanda, ItemPedido } from '@/types'
+import { construirPeriodo, type PeriodoKey } from '@/lib/periodo'
+import { fmt } from '@/lib/formatters'
+import { baixarCsv } from '@/lib/exportCsv'
+import {
+  useDashboard, computeResumo, computeTendencia, computeProdutos,
+  computeMix, computeHeatmap, computeQualidade,
+} from './dashboard/useDashboard'
+import PeriodoSelector from './dashboard/PeriodoSelector'
+import ResumoCards from './dashboard/ResumoCards'
+import AoVivoHoje from './dashboard/AoVivoHoje'
+import ProdutosRanking from './dashboard/ProdutosRanking'
+import MixPagamento from './dashboard/MixPagamento'
+import QualidadeGiro from './dashboard/QualidadeGiro'
 
-type RecentItem = ItemPedido & {
-  produto?: { nome: string; preco: number }
-  comanda?: Comanda & { mesa?: { nome: string } }
-}
-
-// Gráfico (recharts) carregado sob demanda — fora do bundle inicial do /admin.
-const VendasPorHoraChart = dynamic(() => import('./VendasPorHoraChart'), {
+const TendenciaChart = dynamic(() => import('./dashboard/TendenciaChart'), {
   ssr: false,
-  loading: () => <div style={{ height: 140 }} />,
+  loading: () => <div style={{ height: 200 }} />,
 })
+const HeatmapPico = dynamic(() => import('./dashboard/HeatmapPico'), { ssr: false })
 
-function useDashboardData(restauranteId: string | null | undefined) {
-  const supabase = createClient()
-  return useQuery({
-    queryKey: ['admin-dashboard', restauranteId],
-    enabled: !!restauranteId,
-    queryFn: async () => {
-      const start = new Date()
-      start.setHours(0, 0, 0, 0)
-
-      // Comandas fechadas hoje (filtro explícito por tenant — defesa em profundidade além da RLS)
-      const { data: fechadas, error: e1 } = await supabase
-        .from('comandas')
-        .select('id, total, fechado_em, mesa:mesas(nome)')
-        .eq('restaurante_id', restauranteId!)
-        .eq('status', 'fechada')
-        .gte('fechado_em', start.toISOString())
-      if (e1) throw e1
-
-      // Itens criados hoje (para top produto e contagem)
-      const { data: itensHoje, error: e2 } = await supabase
-        .from('itens_pedido')
-        .select('id, quantidade, comanda_id, produto:produtos(nome, preco), comanda:comandas(mesa_id, mesa:mesas(nome), status), criado_em')
-        .eq('restaurante_id', restauranteId!)
-        .gte('criado_em', start.toISOString())
-      if (e2) throw e2
-
-      // Últimos 10 pedidos (itens recentes)
-      const { data: recent, error: e3 } = await supabase
-        .from('itens_pedido')
-        .select('*, produto:produtos(nome, preco), comanda:comandas(*, mesa:mesas(nome))')
-        .eq('restaurante_id', restauranteId!)
-        .order('criado_em', { ascending: false })
-        .limit(10)
-      if (e3) throw e3
-
-      return {
-        fechadas: fechadas ?? [],
-        itensHoje: itensHoje ?? [],
-        recent: (recent ?? []) as unknown as RecentItem[],
-      }
-    },
-    staleTime: 60_000,
-  })
+function Bloco({ titulo, children }: { titulo: string; children: React.ReactNode }) {
+  return (
+    <div className="rounded-xl p-4" style={{ background: 'var(--surface)', border: '1px solid var(--line)' }}>
+      <div className="text-sm font-bold mb-3" style={{ color: 'var(--ink)' }}>{titulo}</div>
+      {children}
+    </div>
+  )
 }
 
 export default function AdminDashboardPage() {
   const { restauranteId } = useRestaurante()
-  const { data, isLoading, isError, error, refetch } = useDashboardData(restauranteId)
 
-  const stats = useMemo(() => {
-    if (!data) return null
-    const faturamento = data.fechadas.reduce((s, c: any) => s + (c.total ?? 0), 0)
-    const pedidos = data.fechadas.length
+  const [periodoKey, setPeriodoKey] = useState<PeriodoKey>('7d')
+  const [customInicio, setCustomInicio] = useState('')
+  const [customFim, setCustomFim] = useState('')
 
-    const produtoCount = new Map<string, number>()
-    for (const it of data.itensHoje as any[]) {
-      const nome = it.produto?.nome ?? '—'
-      produtoCount.set(nome, (produtoCount.get(nome) ?? 0) + it.quantidade)
-    }
-    const topProduto = [...produtoCount.entries()].sort((a, b) => b[1] - a[1])[0]
+  const periodo = useMemo(
+    () => construirPeriodo(periodoKey, { customInicio, customFim }),
+    [periodoKey, customInicio, customFim],
+  )
 
-    const mesaRev = new Map<string, number>()
-    for (const c of data.fechadas as any[]) {
-      const nome = c.mesa?.nome ?? '—'
-      mesaRev.set(nome, (mesaRev.get(nome) ?? 0) + (c.total ?? 0))
-    }
-    const topMesa = [...mesaRev.entries()].sort((a, b) => b[1] - a[1])[0]
+  const { data, isLoading, isError, error, refetch } = useDashboard(restauranteId, periodo)
+  const resumo = useMemo(() => (data ? computeResumo(data) : null), [data])
+  const tendencia = useMemo(() => (data ? computeTendencia(data.fechadasAtual, periodo) : []), [data, periodo])
+  const produtos = useMemo(() => (data ? computeProdutos(data.itensFechadas) : null), [data])
+  const mix = useMemo(() => (data ? computeMix(data.fechadasAtual) : null), [data])
+  const heatmap = useMemo(() => (data ? computeHeatmap(data.itensPeriodo) : null), [data])
+  const qualidade = useMemo(() => (data ? computeQualidade(data) : null), [data])
 
-    // Vendas por hora — últimas 8h
-    const now = new Date()
-    const hours: { h: string; v: number }[] = []
-    for (let i = 7; i >= 0; i--) {
-      const d = new Date(now)
-      d.setHours(d.getHours() - i, 0, 0, 0)
-      hours.push({ h: `${d.getHours().toString().padStart(2, '0')}h`, v: 0 })
-    }
-    for (const c of data.fechadas as any[]) {
-      if (!c.fechado_em) continue
-      const cd = new Date(c.fechado_em)
-      const diffH = Math.floor((now.getTime() - cd.getTime()) / 3_600_000)
-      if (diffH < 0 || diffH > 7) continue
-      const idx = 7 - diffH
-      hours[idx].v += c.total ?? 0
-    }
-
-    return { faturamento, pedidos, topProduto, topMesa, hours }
-  }, [data])
+  const exportar = () => {
+    if (!data) return
+    const linhas = data.fechadasAtual.map((c) => {
+      const tempoMin = c.fechado_em && c.criado_em
+        ? Math.round((new Date(c.fechado_em).getTime() - new Date(c.criado_em).getTime()) / 60000)
+        : ''
+      return [
+        c.fechado_em ? fmt.date(c.fechado_em) : '',
+        c.fechado_em ? fmt.time(c.fechado_em) : '',
+        c.mesa?.nome ?? '',
+        fmt.money(c.total ?? 0),
+        fmt.money(c.taxa_servico_valor ?? 0),
+        c.forma_pagamento ?? '',
+        c.numero_pessoas ?? '',
+        tempoMin,
+      ]
+    })
+    baixarCsv(
+      `dashboard_${periodo.key}_${periodo.inicio.toISOString().slice(0, 10)}`,
+      ['Data', 'Hora', 'Mesa', 'Total', 'Taxa', 'Pagamento', 'Pessoas', 'Tempo de mesa (min)'],
+      linhas,
+    )
+  }
 
   return (
     <>
-      <StaffHeader title="Painel" subtitle={`GetOrder · ${new Date().toLocaleDateString('pt-BR')}`} />
+      <StaffHeader
+        title="Painel"
+        subtitle={`GetOrder · ${new Date().toLocaleDateString('pt-BR')}`}
+        rightSlot={
+          <button
+            onClick={exportar}
+            disabled={!data || !!isLoading}
+            className="text-xs font-bold rounded-lg px-3 flex items-center gap-1.5"
+            style={{
+              minHeight: 40,
+              background: 'transparent',
+              border: '1px solid var(--line)',
+              color: data ? 'var(--ink)' : 'var(--muted)',
+            }}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 3v12M8 11l4 4 4-4M4 19h16" />
+            </svg>
+            Exportar
+          </button>
+        }
+      />
 
-      <div className="flex-1 overflow-y-auto px-6 py-4">
-        {isLoading && <div className="py-16 flex justify-center"><Spinner color="var(--accent)" /></div>}
-        {isError && (
-          <EmptyState
-            icon="⚠️"
-            title="Erro ao carregar"
-            description={(error as any)?.message}
-            action={
-              <button onClick={() => refetch()} className="text-sm underline" style={{ color: 'var(--accent)' }}>
-                Tentar novamente
-              </button>
-            }
+      <div className="flex-1 overflow-y-auto px-6 py-4 flex flex-col gap-6">
+        <AoVivoHoje restauranteId={restauranteId} />
+
+        <div className="flex flex-col gap-3">
+          <PeriodoSelector
+            periodoKey={periodoKey}
+            onSelect={setPeriodoKey}
+            customInicio={customInicio}
+            customFim={customFim}
+            onCustom={(campo, valor) => (campo === 'inicio' ? setCustomInicio(valor) : setCustomFim(valor))}
           />
-        )}
-        {stats && (
+
+          {isLoading && <div className="py-16 flex justify-center"><Spinner color="var(--accent)" /></div>}
+          {isError && (
+            <EmptyState
+              icon="⚠️"
+              title="Erro ao carregar"
+              description={(error as any)?.message}
+              action={
+                <button onClick={() => refetch()} className="text-sm underline" style={{ color: 'var(--accent)' }}>
+                  Tentar novamente
+                </button>
+              }
+            />
+          )}
+          {resumo && !isLoading && !isError && <ResumoCards resumo={resumo} />}
+        </div>
+
+        {data && !isLoading && !isError && (
           <>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-6">
-              <MetricCard label="Faturamento hoje" value={fmt.currency(stats.faturamento)} />
-              <MetricCard label="Pedidos hoje" value={String(stats.pedidos)} />
-              <MetricCard
-                label="Produto top"
-                value={stats.topProduto?.[0] ?? '—'}
-                sub={stats.topProduto ? `${stats.topProduto[1]} un.` : ''}
-              />
-              <MetricCard
-                label="Mesa top"
-                value={stats.topMesa?.[0] ?? '—'}
-                sub={stats.topMesa ? fmt.currency(stats.topMesa[1]) : ''}
-              />
-            </div>
-
-            <div
-              className="rounded-xl p-4 mb-6"
-              style={{ background: 'var(--surface)', border: '1px solid var(--line)' }}
-            >
-              <div className="flex justify-between items-baseline mb-3">
-                <div className="text-sm font-bold" style={{ color: 'var(--ink)' }}>Vendas por hora</div>
-                <div className="text-xs" style={{ color: 'var(--text-mid)' }}>últimas 8h</div>
-              </div>
-              <VendasPorHoraChart hours={stats.hours} />
-            </div>
-
-            <div
-              className="rounded-xl p-4"
-              style={{ background: 'var(--surface)', border: '1px solid var(--line)' }}
-            >
-              <div className="text-sm font-bold mb-3" style={{ color: 'var(--ink)' }}>Últimos pedidos</div>
-              {(data?.recent ?? []).length === 0 && (
-                <div className="text-xs py-4 text-center" style={{ color: 'var(--muted)' }}>
-                  Sem atividade ainda.
-                </div>
-              )}
-              {(data?.recent ?? []).map((it, i, arr) => (
-                <div
-                  key={it.id}
-                  className="flex justify-between items-center py-3"
-                  style={{ borderTop: i === 0 ? 'none' : '1px solid var(--line)' }}
-                >
-                  <div className="min-w-0">
-                    <div className="text-sm truncate" style={{ color: 'var(--ink)' }}>
-                      {it.produto?.nome ?? '—'} <span style={{ color: 'var(--text-mid)' }}>× {it.quantidade}</span>
-                    </div>
-                    <div className="text-xs" style={{ color: 'var(--text-mid)' }}>
-                      {(it.comanda?.mesa as any)?.nome ?? '—'} · {fmt.time(it.criado_em)}
-                    </div>
-                  </div>
-                  <StatusBadge status={it.status} />
-                </div>
-              ))}
-            </div>
+            <Bloco titulo="Tendência de faturamento">
+              <TendenciaChart data={tendencia} />
+            </Bloco>
+            <Bloco titulo="Desempenho de produtos">
+              {produtos && <ProdutosRanking produtos={produtos.produtos} adicionais={produtos.adicionais} />}
+            </Bloco>
+            <Bloco titulo="Mix operacional">
+              {mix && <MixPagamento mix={mix} />}
+            </Bloco>
+            <Bloco titulo="Pico — dia × hora">
+              {heatmap && <HeatmapPico matriz={heatmap.matriz} max={heatmap.max} />}
+            </Bloco>
+            <Bloco titulo="Qualidade / giro">
+              {qualidade && <QualidadeGiro q={qualidade} />}
+            </Bloco>
           </>
         )}
       </div>
     </>
-  )
-}
-
-function MetricCard({ label, value, sub }: { label: string; value: string; sub?: string }) {
-  return (
-    <div
-      className="rounded-xl p-4"
-      style={{ background: 'var(--surface)', border: '1px solid var(--line)' }}
-    >
-      <div className="text-xs mb-2" style={{ color: 'var(--text-mid)' }}>{label}</div>
-      <div className="serif text-lg leading-tight truncate" style={{ color: 'var(--ink)', fontWeight: 500 }}>
-        {value}
-      </div>
-      {sub && (
-        <div className="text-xs mt-1" style={{ color: 'var(--text-mid)' }}>{sub}</div>
-      )}
-    </div>
   )
 }

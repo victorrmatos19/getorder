@@ -125,13 +125,17 @@ export type Comanda = {
   mesa_id: string
   cliente_nome: string | null
   cliente_cpf: string | null
-  status: 'aberta' | 'fechada'
+  status: 'aberta' | 'fechada' | 'cancelada'
   forma_pagamento: FormaPagamento | null
   total: number | null
   numero_pessoas: number
   taxa_servico_valor: number | null
   taxa_servico_aplicada: boolean
   aceite_lgpd_em: string | null
+  // auditoria de cancelamento (migrations 014/015 — prevenção de comanda-zumbi)
+  cancelada_em: string | null
+  cancelada_por: string | null
+  cancelamento_motivo: 'expiracao_automatica' | 'cancelada_garcom' | null
   criado_em: string
   fechado_em: string | null
   mesa?: Mesa
