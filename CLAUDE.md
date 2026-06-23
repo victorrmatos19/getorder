@@ -576,7 +576,12 @@ Realtime); UPDATE (mover card) e a carga inicial (useQuery) **não** tocam.
 ### 5. Admin (/admin)
 
 ```
-- /admin                     → Dashboard: faturamento dia, pedidos, produto top, mesa top, gráfico por hora
+- /admin                     → Dashboard v2 (gerencial): bloco "Ao vivo de hoje" (realtime) +
+                               seletor de período (Hoje/7d/Mês/Personalizado) com comparação Δ% vs
+                               período anterior; blocos Resumo, Tendência (Recharts), Produtos
+                               (ranking receita/volume + cauda + adicionais), Mix de pagamento,
+                               Heatmap dia×hora, Qualidade/giro; **Exportar CSV** do período.
+                               Tudo de `comandas`+`itens_pedido`, financeiro só de `status='fechada'`
 - /admin/cardapio            → CRUD produtos + categorias, toggle disponível + toggle "Esgotado",
                                upload de foto; no editor: seção "Adicionais e opções" (vincular grupos)
                                e checkbox "Esgotado (sem estoque hoje)"; inputs de preço com
@@ -872,6 +877,9 @@ Itens legados (sem `preco_base_snapshot`) caem no fallback `produto.preco`.
       RPC transacional `lancar_pedido_garcom` (reaproveita `criar_item_pedido`)
 - [x] Prevenção de comanda-zumbi — Caso 1 (comanda vazia, migrations 014/015): job pg_cron expira
       comandas `aberta` sem itens > 60min + botão "Cancelar comanda vazia" (RPC `cancelar_comanda_vazia`)
+- [x] Dashboard admin v2 (gerencial): período + comparação Δ%, tendência, ranking de produtos,
+      mix de pagamento, heatmap dia×hora, qualidade/giro, "ao vivo de hoje" (realtime) e export CSV
+      (`src/app/admin/dashboard/*`, `lib/periodo.ts`, `lib/exportCsv.ts`; sem nova dependência)
 
 ## ⏳ Gaps conhecidos (roadmap)
 
@@ -969,5 +977,6 @@ Quando o usuário pedir nova funcionalidade:
 conexão (hook `useCozinhaAlerta`); garçom card verde quando há item pronto; produto "esgotado hoje"
 (migration 012); máscara de moeda nos inputs de preço; garçom lança pedido pela tela de staff
 (migration 013, RPC `lancar_pedido_garcom`); prevenção de comanda-zumbi Caso 1 (migrations 014/015:
-job pg_cron + `cancelar_comanda_vazia`). Migrations 001–007 arquivadas.
-**Versão do produto:** 0.5.0 — MVP em produção (mesa fixa + adicionais + esgotado + lançamento garçom + anti comanda-zumbi)
+job pg_cron + `cancelar_comanda_vazia`); dashboard admin v2 (período + comparação Δ% + tendência +
+produtos + mix + heatmap + qualidade/giro + export CSV). Migrations 001–007 arquivadas.
+**Versão do produto:** 0.6.0 — MVP em produção (mesa fixa + adicionais + esgotado + lançamento garçom + anti comanda-zumbi + dashboard v2)
