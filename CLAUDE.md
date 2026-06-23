@@ -333,7 +333,7 @@ seguro cancelar:
 - **Status novo `cancelada`** no enum `comanda_status` + colunas de auditoria (`cancelada_em`,
   `cancelada_por`, `cancelamento_motivo`). `cancelada` **nunca** entra em faturamento.
 - **Job pg_cron `expirar_comandas_vazias()`** (`*/5 * * * *`): cancela comandas `aberta` **sem
-  itens** com `criado_em > 30 min` (`motivo='expiracao_automatica'`). Guard de race: `not exists
+  itens** com `criado_em > 60 min` (`motivo='expiracao_automatica'`). Guard de race: `not exists
   (itens)` — se um item entrar antes do job, a comanda **não** é cancelada. Threshold global no MVP.
 - **RPC `cancelar_comanda_vazia(p_comanda_id)`** (`SECURITY DEFINER`): cancelamento manual do
   garçom/admin, **só** em comanda vazia do próprio tenant (`auth_restaurante_id()` + `status='aberta'`
@@ -871,7 +871,7 @@ Itens legados (sem `preco_base_snapshot`) caem no fallback `produto.preco`.
 - [x] Garçom lança pedido pela tela de staff (migration 013): /garcom/nova-comanda + /garcom/pedido,
       RPC transacional `lancar_pedido_garcom` (reaproveita `criar_item_pedido`)
 - [x] Prevenção de comanda-zumbi — Caso 1 (comanda vazia, migrations 014/015): job pg_cron expira
-      comandas `aberta` sem itens > 30min + botão "Cancelar comanda vazia" (RPC `cancelar_comanda_vazia`)
+      comandas `aberta` sem itens > 60min + botão "Cancelar comanda vazia" (RPC `cancelar_comanda_vazia`)
 
 ## ⏳ Gaps conhecidos (roadmap)
 
@@ -888,7 +888,7 @@ Itens legados (sem `preco_base_snapshot`) caem no fallback `produto.preco`.
 - [x] ~~Estoque básico (produto "esgotado hoje")~~ — feito (migration 012)
 - [ ] Toggle de favorito/"Mais pedidos" na tela do garçom (deixado fora do v1 do lançamento manual)
 - [ ] Comanda-zumbi Caso 2: comanda COM itens abandonada (lembrete/selo de ociosidade; perda/dine-and-dash);
-      threshold de expiração configurável por restaurante (hoje é 30min global)
+      threshold de expiração configurável por restaurante (hoje é 60min global)
 - [ ] Edição de pedido após enviar
 - [ ] Divisão por itens (não só igual)
 - [ ] Notificações Web Push pra garçom (sobre a PWA do staff)

@@ -1,6 +1,6 @@
 -- 015_prevencao_comanda_zumbi.sql
 -- Prevenção de comanda-zumbi — Caso 1 (comanda VAZIA).
--- Expira automaticamente comandas 'aberta' SEM itens paradas > 30 min (pg_cron)
+-- Expira automaticamente comandas 'aberta' SEM itens paradas > 60 min (pg_cron)
 -- e permite o garçom/admin cancelar manualmente uma comanda vazia.
 -- Comandas COM itens nunca são tocadas (fecham via "Encerrar e cobrar").
 
@@ -9,7 +9,7 @@ alter table public.comandas add column if not exists cancelada_em timestamptz;
 alter table public.comandas add column if not exists cancelada_por uuid references auth.users(id); -- null = sistema (job)
 alter table public.comandas add column if not exists cancelamento_motivo text; -- 'expiracao_automatica' | 'cancelada_garcom'
 
--- 2) Job agendado (pg_cron): expira comandas vazias paradas > 30 min
+-- 2) Job agendado (pg_cron): expira comandas vazias paradas > 60 min
 --    "Última atividade" do Caso 1 = o próprio comandas.criado_em (comanda vazia não tem itens).
 create extension if not exists pg_cron;
 
@@ -25,7 +25,7 @@ begin
          cancelada_em = now(),
          cancelamento_motivo = 'expiracao_automatica'
    where c.status = 'aberta'
-     and c.criado_em < now() - interval '30 minutes'
+     and c.criado_em < now() - interval '60 minutes'
      -- guard de race: se um item entrar entre a checagem e o update, o not exists falha
      and not exists (select 1 from itens_pedido i where i.comanda_id = c.id);
 end;
