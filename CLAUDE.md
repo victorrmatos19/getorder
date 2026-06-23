@@ -215,13 +215,17 @@ comandas (
   mesa_id uuid FK,
   cliente_nome text,
   cliente_cpf text,
-  status text CHECK ('aberta','fechada'),
+  status comanda_status CHECK ('aberta','fechada','cancelada'),   -- ENUM; 'cancelada' = migration 014
   forma_pagamento text CHECK ('pix','debito','credito','dinheiro'),
   total numeric(10,2),
   numero_pessoas integer DEFAULT 1,
   taxa_servico_valor numeric(10,2),
   taxa_servico_aplicada boolean DEFAULT true,
   aceite_lgpd_em timestamptz,
+  -- auditoria de cancelamento (migration 015 — prevenção de comanda-zumbi)
+  cancelada_em timestamptz,
+  cancelada_por uuid references auth.users(id),   -- null = sistema (job pg_cron)
+  cancelamento_motivo text,                       -- 'expiracao_automatica' | 'cancelada_garcom'
   criado_em timestamptz,
   fechado_em timestamptz
 )
@@ -320,6 +324,26 @@ transacional). Ela:
   rollback total; retorna o id da comanda.
 - Sem policy nova: o garçom já lê `mesas` (público) e `comandas` do tenant; a escrita é via
   SECURITY DEFINER. Wrapper tipado em `lib/lancarPedidoGarcom.ts` (frontend só manda IDs).
+
+### Prevenção de comanda-zumbi — Caso 1: comanda VAZIA (migrations 014/015)
+
+No modelo mesa-fixa, uma comanda `aberta` **sem itens** (cliente escaneou por curiosidade, ou
+garçom abriu e abandonou) deixa a mesa "ocupada" e polui o painel. Como não há nada devido, é
+seguro cancelar:
+- **Status novo `cancelada`** no enum `comanda_status` + colunas de auditoria (`cancelada_em`,
+  `cancelada_por`, `cancelamento_motivo`). `cancelada` **nunca** entra em faturamento.
+- **Job pg_cron `expirar_comandas_vazias()`** (`*/5 * * * *`): cancela comandas `aberta` **sem
+  itens** com `criado_em > 30 min` (`motivo='expiracao_automatica'`). Guard de race: `not exists
+  (itens)` — se um item entrar antes do job, a comanda **não** é cancelada. Threshold global no MVP.
+- **RPC `cancelar_comanda_vazia(p_comanda_id)`** (`SECURITY DEFINER`): cancelamento manual do
+  garçom/admin, **só** em comanda vazia do próprio tenant (`auth_restaurante_id()` + `status='aberta'`
+  + `not exists` itens); erro claro se tiver itens. Wrapper `lib/cancelarComandaVazia.ts`.
+- **UI:** em `/garcom/comanda/[id]`, quando a comanda está **vazia**, o rodapé mostra "Cancelar
+  comanda vazia" (no lugar de "Encerrar e Cobrar"). Mesa volta a aparecer livre (cancelada ≠ aberta).
+- ⚠️ **Comandas COM itens nunca são tocadas** — fecham via "Encerrar e cobrar". Caso 2 (comanda com
+  itens abandonada) está **fora de escopo** no MVP.
+- Dashboard não precisou mudar: faturamento usa `status='fechada'`, e as queries por item só veem
+  comandas que têm itens (cancelada é vazia).
 
 ### RLS — Row Level Security
 
@@ -710,6 +734,8 @@ npm run db:status    # mostra URLs e chaves locais
   - `011_restaurantes_admin_update.sql` — admin salva configs do próprio restaurante; protege `slug`/`ativo`.
   - `012_add_produto_esgotado.sql` — coluna `produtos.esgotado` + guarda `'Produto esgotado'` na RPC `criar_item_pedido`.
   - `013_lancar_pedido_garcom.sql` — RPC `lancar_pedido_garcom` (lançamento manual pelo garçom).
+  - `014_comanda_status_cancelada.sql` — valor `'cancelada'` no enum `comanda_status` (separada: enum só usável após commit).
+  - `015_prevencao_comanda_zumbi.sql` — auditoria + job pg_cron `expirar_comandas_vazias()` + RPC `cancelar_comanda_vazia`.
 - `supabase/seed.sql` = dump dos **dados do PRD** (public + auth). **Gitignored** (dados reais +
   hashes). Para recriá-lo: `npx supabase db dump --linked --data-only -f supabase/seed.sql`.
 
@@ -844,6 +870,8 @@ Itens legados (sem `preco_base_snapshot`) caem no fallback `produto.preco`.
 - [x] Máscara de moeda (R$) em todos os inputs de preço (`fmt.money/moneyMask/moneyParse`)
 - [x] Garçom lança pedido pela tela de staff (migration 013): /garcom/nova-comanda + /garcom/pedido,
       RPC transacional `lancar_pedido_garcom` (reaproveita `criar_item_pedido`)
+- [x] Prevenção de comanda-zumbi — Caso 1 (comanda vazia, migrations 014/015): job pg_cron expira
+      comandas `aberta` sem itens > 30min + botão "Cancelar comanda vazia" (RPC `cancelar_comanda_vazia`)
 
 ## ⏳ Gaps conhecidos (roadmap)
 
@@ -859,6 +887,8 @@ Itens legados (sem `preco_base_snapshot`) caem no fallback `produto.preco`.
 - [ ] Ofertas valendo no pedido (RPC honrar em_oferta/oferta_preco no snapshot)
 - [x] ~~Estoque básico (produto "esgotado hoje")~~ — feito (migration 012)
 - [ ] Toggle de favorito/"Mais pedidos" na tela do garçom (deixado fora do v1 do lançamento manual)
+- [ ] Comanda-zumbi Caso 2: comanda COM itens abandonada (lembrete/selo de ociosidade; perda/dine-and-dash);
+      threshold de expiração configurável por restaurante (hoje é 30min global)
 - [ ] Edição de pedido após enviar
 - [ ] Divisão por itens (não só igual)
 - [ ] Notificações Web Push pra garçom (sobre a PWA do staff)
@@ -936,7 +966,8 @@ Quando o usuário pedir nova funcionalidade:
 ---
 
 **Última atualização:** Junho de 2026 — cozinha em kanban + alerta sonoro/Wake Lock/indicador de
-conexão (migration —, hook `useCozinhaAlerta`); garçom card verde quando há item pronto; produto
-"esgotado hoje" (migration 012); máscara de moeda nos inputs de preço; garçom lança pedido pela
-tela de staff (migration 013, RPC `lancar_pedido_garcom`). Migrations 001–007 arquivadas.
-**Versão do produto:** 0.4.0 — MVP em produção (modo mesa fixa + adicionais + esgotado + lançamento pelo garçom)
+conexão (hook `useCozinhaAlerta`); garçom card verde quando há item pronto; produto "esgotado hoje"
+(migration 012); máscara de moeda nos inputs de preço; garçom lança pedido pela tela de staff
+(migration 013, RPC `lancar_pedido_garcom`); prevenção de comanda-zumbi Caso 1 (migrations 014/015:
+job pg_cron + `cancelar_comanda_vazia`). Migrations 001–007 arquivadas.
+**Versão do produto:** 0.5.0 — MVP em produção (mesa fixa + adicionais + esgotado + lançamento garçom + anti comanda-zumbi)
