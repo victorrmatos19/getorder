@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import { abrirComandaMesa } from '@/lib/comandaCliente'
 import Spinner from '@/components/Spinner'
 import EmptyState from '@/components/EmptyState'
 import CardapioView from './CardapioView'
@@ -24,18 +25,9 @@ export default function MesaPage() {
     let active = true
 
     const init = async () => {
-      // 1+2 em paralelo: mesa e comanda aberta só dependem do mesaId (da URL).
-      const [mesaRes, comandaRes] = await Promise.all([
-        supabase.from('mesas').select('*').eq('id', mesaId).maybeSingle(),
-        supabase
-          .from('comandas')
-          .select('id')
-          .eq('mesa_id', mesaId)
-          .eq('status', 'aberta')
-          .order('criado_em', { ascending: false })
-          .limit(1)
-          .maybeSingle(),
-      ])
+      // A mesa é leitura pública (cardápio). A comanda é aberta/reusada SÓ via RPC
+      // SECURITY DEFINER (o cliente não insere/lê comandas direto — RLS escopada).
+      const mesaRes = await supabase.from('mesas').select('*').eq('id', mesaId).maybeSingle()
 
       if (!active) return
 
@@ -46,35 +38,16 @@ export default function MesaPage() {
       }
       setMesa(mesaData as Mesa)
 
-      if (comandaRes.error) {
-        setStatus('error')
-        return
-      }
-      if (comandaRes.data) {
-        setComandaId(comandaRes.data.id)
+      // find-or-create da comanda aberta da mesa (servidor reusa a comanda existente)
+      try {
+        const novaId = await abrirComandaMesa(mesaData.id)
+        if (!active) return
+        setComandaId(novaId)
         setStatus('ready')
-        return
-      }
-
-      // 3. Não há comanda aberta — cria uma anônima (sem nome/CPF/LGPD)
-      const { data: nova, error: insertErr } = await supabase
-        .from('comandas')
-        .insert({
-          mesa_id: mesaData.id,
-          restaurante_id: mesaData.restaurante_id,
-          status: 'aberta',
-        })
-        .select('id')
-        .single()
-
-      if (!active) return
-      if (insertErr || !nova) {
+      } catch {
+        if (!active) return
         setStatus('error')
-        return
       }
-
-      setComandaId(nova.id)
-      setStatus('ready')
     }
 
     setStatus('loading')

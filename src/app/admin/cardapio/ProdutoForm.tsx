@@ -78,8 +78,10 @@ export default function ProdutoForm({ initial, defaultCategoriaId, categorias, o
       let foto_url = fotoUrl
 
       if (file) {
+        if (!restauranteId) throw new Error('Restaurante não definido')
         const ext = file.name.split('.').pop() || 'jpg'
-        const path = `${uid()}.${ext}`
+        // Foto fica na pasta do tenant: a policy de Storage exige <restaurante_id>/<arquivo>.
+        const path = `${restauranteId}/${uid()}.${ext}`
         const { error: upErr } = await supabase
           .storage.from('produtos')
           .upload(path, file, { upsert: false, contentType: file.type })

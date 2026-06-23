@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { fecharComanda } from '@/lib/fecharComanda'
 import Spinner from '@/components/Spinner'
 import { fmt } from '@/lib/formatters'
 import { subtotalItem } from '@/lib/calcComanda'
@@ -73,29 +74,14 @@ export default function CheckoutModal({
     setErr('')
     setBusy(true)
     try {
-      const supabase = createClient()
-      const { error: e1 } = await supabase
-        .from('comandas')
-        .update({
-          status: 'fechada',
-          forma_pagamento: method,
-          total,
-          taxa_servico_valor: servico,
-          taxa_servico_aplicada: efetivamenteAplicada,
-          numero_pessoas: numeroPessoas,
-          fechado_em: new Date().toISOString(),
-        })
-        .eq('id', comandaId)
-      if (e1) throw e1
-
-      const { error: e2 } = await supabase
-        .from('itens_pedido')
-        .update({ status: 'entregue' })
-        .eq('comanda_id', comandaId)
-        .neq('status', 'cancelado')
-      if (e2) throw e2
-
-      setSuccess({ method, total })
+      // Total/taxa recomputados no servidor (RPC fechar_comanda) — o client não envia o total.
+      const totalServidor = await fecharComanda({
+        comandaId,
+        formaPagamento: method,
+        taxaAplicada: efetivamenteAplicada,
+        numeroPessoas,
+      })
+      setSuccess({ method, total: totalServidor })
     } catch (e: any) {
       setErr(e.message || 'Erro ao encerrar a comanda.')
     } finally {

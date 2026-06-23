@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { createClient } from '@/lib/supabase/client'
 import Logo from '@/components/Logo'
 import ProductCard from '@/components/ProductCard'
 import EmptyState from '@/components/EmptyState'
@@ -14,9 +13,10 @@ import { fmt } from '@/lib/formatters'
 import { subtotalItem, totalComanda, subtotalCartLine, totalCart } from '@/lib/calcComanda'
 import type { CartLine } from '@/lib/calcComanda'
 import { criarItemPedido } from '@/lib/itensPedido'
+import { cancelarItemCliente } from '@/lib/comandaCliente'
 import { useProdutos } from '@/lib/hooks/useProdutos'
 import { useCategorias } from '@/lib/hooks/useCategorias'
-import { useItensComanda } from '@/lib/hooks/useItens'
+import { useComandaCliente } from '@/lib/hooks/useComandaCliente'
 import { useDisponibilidade } from '@/lib/hooks/useDisponibilidade'
 import type { Categoria, ItemPedido, Mesa, Produto } from '@/types'
 
@@ -44,36 +44,14 @@ export default function CardapioView({ mesa, comandaId, onReset }: Props) {
 
   const produtosQ      = useProdutos(mesa.restaurante_id, { soDisponiveis: true })
   const categoriasQ    = useCategorias(mesa.restaurante_id, { soAtivas: true })
-  const itensQ         = useItensComanda(comandaId)
+  const comandaQ       = useComandaCliente(comandaId)
   const disponibilidadeQ = useDisponibilidade(mesa.restaurante_id)
 
-  useEffect(() => {
-    const supabase = createClient()
-    supabase
-      .from('comandas')
-      .select('cliente_nome')
-      .eq('id', comandaId)
-      .maybeSingle()
-      .then(({ data }) => setClienteNome(data?.cliente_nome ?? ''))
-  }, [comandaId])
+  const itens = comandaQ.data?.itens ?? []
 
-  // Realtime
   useEffect(() => {
-    const supabase = createClient()
-    const ch = supabase
-      .channel(`comanda-${comandaId}`)
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'itens_pedido', filter: `comanda_id=eq.${comandaId}` },
-        () => {
-          qc.invalidateQueries({ queryKey: ['itens', 'comanda', comandaId] })
-        },
-      )
-      .subscribe()
-    return () => {
-      supabase.removeChannel(ch)
-    }
-  }, [comandaId, qc])
+    setClienteNome(comandaQ.data?.cliente_nome ?? '')
+  }, [comandaQ.data?.cliente_nome])
 
   const produtos = produtosQ.data ?? []
   const categorias: Categoria[] = categoriasQ.data ?? []
@@ -139,7 +117,7 @@ export default function CardapioView({ mesa, comandaId, onReset }: Props) {
       }
     }
     setSubmitting(false)
-    qc.invalidateQueries({ queryKey: ['itens', 'comanda', comandaId] })
+    qc.invalidateQueries({ queryKey: ['comanda-cliente', comandaId] })
 
     if (erro) {
       setCart((c) => c.filter((l) => !enviadas.includes(l.key)))
@@ -153,20 +131,13 @@ export default function CardapioView({ mesa, comandaId, onReset }: Props) {
 
   const cancelarItem = async (id: string) => {
     try {
-      const supabase = createClient()
-      const { data, error } = await supabase
-        .from('itens_pedido')
-        .update({ status: 'cancelado', cancelado_em: new Date().toISOString() })
-        .eq('id', id)
-        .eq('status', 'novo')
-        .select('id')
-      if (error) throw error
-      if (!data || data.length === 0) {
+      const ok = await cancelarItemCliente(comandaId, id)
+      if (!ok) {
         setToast({ visible: true, message: 'Já estava em preparo, não foi possível cancelar.' })
         return
       }
       setToast({ visible: true, message: 'Item cancelado' })
-      qc.invalidateQueries({ queryKey: ['itens', 'comanda', comandaId] })
+      qc.invalidateQueries({ queryKey: ['comanda-cliente', comandaId] })
     } catch (e: any) {
       setToast({ visible: true, message: e.message || 'Erro ao cancelar.' })
     }
@@ -331,11 +302,11 @@ export default function CardapioView({ mesa, comandaId, onReset }: Props) {
 
       {tab === 'comanda' && (
         <MinhaComanda
-          itens={itensQ.data ?? []}
-          loading={itensQ.isLoading}
-          error={itensQ.isError ? (itensQ.error as any) : null}
+          itens={itens}
+          loading={comandaQ.isLoading}
+          error={comandaQ.isError ? (comandaQ.error as any) : null}
           taxaPercentual={disponibilidadeQ.data?.restaurante?.taxa_servico_percentual ?? 10}
-          onRefetch={() => itensQ.refetch()}
+          onRefetch={() => comandaQ.refetch()}
           onCancelarItem={cancelarItem}
           onSolicitarConta={solicitarConta}
         />
