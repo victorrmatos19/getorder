@@ -2,7 +2,7 @@
 
 > Roteiro de testes de fluxo do sistema, pensado para ser executado **manualmente** ou por uma
 > **skill de QA** que dirige o app local via navegador (snapshots/cliques/eval).
-> Cobre as **15 rotas** do sistema. Não é Playwright — é um roteiro estruturado.
+> Cobre as **17 rotas** do sistema. Não é Playwright — é um roteiro estruturado.
 >
 > Convenção de marcação por suite: **[A]** = automatizável só com leitura/cliques no browser ·
 > **[D]** = precisa de dado/efeito no banco (verificar no Studio/psql ou em outra tela).
@@ -94,8 +94,9 @@ Os valores em R$ dependem do seed (podem mudar). Asserte comportamento:
 5. Se houver grupo **múltipla**: marcar várias (checkbox), **bloquear acima do máximo** (opções não marcadas desabilitam ao atingir o teto). Opção paga mostra **"+ R$ X"**; opção grátis não mostra preço.
 6. Preencher **observação** (≤200) e **quantidade** (stepper). O **total do botão recalcula ao vivo** (base + adicionais) × qtd.
 7. Voltar ao cardápio; abrir um produto **sem adicionais** (ex.: uma cerveja) → mesma tela, só observação + quantidade, botão já habilitado.
+8. **Produto esgotado** (marque um como "Esgotado" no admin — Suite 10): no cardápio ele **continua aparecendo** com badge vermelho **"Esgotado"**, nome/preço **riscados** e card esmaecido; ao abrir o detalhe, o botão fica **desabilitado** ("Produto esgotado") e não adiciona ao carrinho. *(esgotado ≠ indisponível: indisponível SOME do cardápio.)*
 
-**Esperado:** validação espelha a RPC; preço ao vivo correto; padrão único para todos os produtos.
+**Esperado:** validação espelha a RPC; preço ao vivo correto; padrão único para todos os produtos; esgotado visível porém bloqueado (defesa também na RPC: `'Produto esgotado'`).
 
 ---
 
@@ -136,50 +137,83 @@ Os valores em R$ dependem do seed (podem mudar). Asserte comportamento:
 ---
 
 ## Suite 7 — Cozinha (`/cozinha`) · [A] ✅
-**Objetivo:** painel da cozinha e transições de status.
+**Objetivo:** painel da cozinha (kanban), alerta sonoro, transições de status e robustez.
 1. Logar como **cozinha**. Tema escuro; header com **relógio rodando** (segundos) + "Cozinha · GetOrder".
-2. 3 abas **Novos / Preparando / Prontos** com contadores.
+2. **KANBAN — as 3 colunas Novos / Preparando / Prontos aparecem AO MESMO TEMPO** (cada uma com
+   scroll próprio), **não são mais abas** que trocam. Cada coluna tem cabeçalho com a cor do status + contador.
 3. Card por mesa com os itens; **adicionais em destaque terracota** no formato `GRUPO: OPÇÃO` (ex.: "PONTO DA CARNE: AO PONTO") e a **observação** também destacada (peso 700).
-4. "Iniciar Preparo" (novo→em_preparo) → some de "Novos", aparece em "Preparando". Depois "Marcar Pronto" e "Confirmar Entrega" (some).
+4. "Iniciar Preparo" (novo→em_preparo) → o card **move para a coluna "Preparando"**. Depois "Marcar Pronto" e "Confirmar Entrega" (some).
 5. **Realtime:** com a cozinha aberta, enviar um pedido pelo cliente em outra aba → o card **aparece sem reload**.
 6. (Urgência) Item com >15min mostra cor/realce de urgência.
+7. **Alerta sonoro:** no header há **"🔔 Ativar som"** (gesto necessário p/ liberar o autoplay; ou
+   o 1º toque na tela arma). Depois vira toggle **🔔/🔕** (mudo persiste em `localStorage`).
+   - Enviar um pedido novo pelo cliente → **toca um chime** (só em **INSERT** de item novo); vários
+     itens do mesmo pedido = **um** toque (debounce). **Mover** card (UPDATE) e **recarregar** a
+     página **não** tocam. Mudo ligado → não toca.
+8. **Indicador de conexão realtime** no header: **🟢 Ao vivo** (conectado), 🟠 Reconectando, 🔴 Sem conexão.
+9. **Wake Lock:** a tela não deve "dormir" com a cozinha aberta (degrada sem erro onde não há suporte).
 
-**Esperado:** adicionais/obs nunca se perdem visualmente; transições e realtime ok; relógio não trava o grid.
+**Esperado:** 3 colunas simultâneas; adicionais/obs nunca se perdem; som só em pedido novo; transições e realtime ok; relógio não trava o grid.
 
 ---
 
 ## Suite 8 — Garçom + comanda/checkout (`/garcom`, `/garcom/comanda/[id]`) · [A] ✅
 **Objetivo:** lista de mesas, comanda detalhada e fechamento.
-1. Logar como **garçom** (ou admin). Lista de mesas com comandas abertas; cada comanda mostra **total** e contagem de itens.
+1. Logar como **garçom** (ou admin). Lista de mesas com comandas abertas; cada comanda mostra **total** e contagem de itens. Header tem o botão **"Nova comanda"** (→ lançamento manual, Suite 17).
 2. **Asserção-chave:** o total da comanda na lista **inclui adicionais** e **bate** com o Subtotal da "Minha Comanda" do cliente (mesma comanda).
-3. Badge "prontos" quando há item pronto.
-4. Abrir a comanda (`/garcom/comanda/[id]`): histórico por **rodada** com adicionais e subtotal por item; status reflete a cozinha (realtime).
+3. **Card INTEIRO VERDE (texto branco)** quando a mesa tem item **'pronto'** para entregar (chamativo), com badge "N prontos"; visual **neutro creme** quando não há nada pronto.
+4. Abrir a comanda (`/garcom/comanda/[id]`): histórico por **rodada** com adicionais e subtotal por item; status reflete a cozinha (realtime). Rodapé tem **"Novo pedido"** (→ Suite 17).
 5. "Entregar" item/todos (quando há prontos); "Cancelar" item 'novo'.
 6. **"Encerrar e Cobrar"**: modal mostra **Total = Subtotal + Taxa** e o resumo com adicionais.
    - **Asserção-chave:** esse Total **é igual** ao Total da "Minha Comanda" do cliente (Suite 5, taxa aplicada, 1 pessoa).
    - Toggle de **taxa** (se não obrigatória), **stepper de pessoas** (valor por pessoa), **formas de pagamento**.
-   - **PIX é apenas seleção — NÃO há QR Code nem "Chave PIX".** Dinheiro → campo "Valor recebido" + troco.
+   - **PIX é apenas seleção — NÃO há QR Code nem "Chave PIX".** Dinheiro → campo **"Valor recebido"** (com **máscara de moeda** em centavos) + troco automático.
 7. Selecionar uma forma e **Confirmar** → tela "Comanda encerrada / R$ X recebido via <forma>"; itens viram "Entregue"; a comanda **some da lista** do garçom.
 
 **Esperado:** paridade de total cliente↔garçom; PIX sem QR; fechamento atualiza status e dashboard.
 
 ---
 
-## Suite 9 — Admin: dashboard (`/admin`) · [A] ✅
-**Objetivo:** métricas do dia.
-1. Logar como **admin**. Cards: **Faturamento hoje, Pedidos hoje, Produto top, Mesa top** (refletem comandas fechadas/itens do dia).
-2. **"Vendas por hora"** — o **gráfico (recharts) carrega sob demanda** (lazy via `next/dynamic`) e renderiza barras.
-3. "Últimos pedidos" lista itens recentes com status.
-4. Após fechar uma comanda (Suite 8), o **Faturamento** reflete o valor.
+## Suite 9 — Admin: dashboard v2 (`/admin`) · [A]/[D] ✅
+**Objetivo:** dashboard **gerencial** — período, comparação Δ% e blocos. Financeiro só de comandas
+`fechada` (ignora `aberta`/`cancelada`); tudo por `restaurante_id`.
+1. Logar como **admin**. Topo: bloco **"Ao vivo · hoje"** (faturamento de hoje + comandas abertas)
+   — **realtime** (enviar/fechar pedido em outra aba atualiza sem reload).
+2. **Seletor de período**: **Hoje · 7 dias · Mês · Personalizado** (com inputs de data). Trocar o
+   período **recalcula todos os blocos**.
+3. **Resumo** (4 cards): Faturamento, Ticket médio, Comandas, Pessoas — cada um com **Δ% vs período
+   anterior** (▲ verde / ▼ vermelho; "—" quando não há base).
+4. **Tendência de faturamento** (Recharts area, lazy via `next/dynamic`): por **dia** (ou por **hora**
+   no período "Hoje").
+5. **Desempenho de produtos**: ranking com toggle **Receita/Volume**, barras, seção **"menos
+   vendidos"** (cauda) e **adicionais mais pedidos**.
+   - **[D] Asserção:** o ranking **bate com a soma real dos snapshots** (conferir 1 produto via SQL:
+     `sum(preco_base_snapshot*quantidade)` das comandas fechadas do período).
+6. **Mix operacional**: formas de pagamento (nº de comandas + Σ valor + %), **taxa captada**, **%
+   de comandas com taxa**, **pessoas/comanda**.
+7. **Pico — dia × hora**: heatmap (grade) dia-da-semana × hora (intensidade = nº de itens por `criado_em`).
+8. **Qualidade / giro**: **tempo médio de mesa** (`fechado_em − criado_em`), **itens cancelados**,
+   **comandas canceladas** separando `expiracao_automatica` × `cancelada_garcom`.
+9. **Exportar** (botão no header) → baixa **CSV do período**: 1 linha por comanda fechada (data,
+   hora, mesa, total, taxa, pagamento, pessoas, tempo de mesa). **[D] Asserção:** totais do CSV
+   batem com a tela.
+10. **[D] Asserção:** o **Faturamento** do período = `Σ total` das comandas `fechada` no intervalo
+    (conferir via SQL); `cancelada`/`aberta` não entram.
 
-**Esperado:** dashboard sem erro; gráfico renderiza (`.recharts-wrapper` presente).
+**Esperado:** trocar período recalcula tudo; Δ% correto vs anterior de mesma duração; números batem
+com o banco; gráficos renderizam; export gera arquivo coerente.
 
 ---
 
 ## Suite 10 — Admin: cardápio (`/admin/cardapio`) · [A]/[D]
 **Objetivo:** CRUD de produtos e categorias + vínculo de adicionais.
 1. Aba **Produtos**: **Criar** produto (nome, preço, categoria, disponível; foto opcional) → aparece na categoria.
-2. **Editar** produto; toggles rápidos **Disponível / Novidade / Oferta** (oferta pede preço promocional < preço).
+   - **Máscara de moeda (R$):** os campos de **preço** e **preço promocional** auto-formatam em
+     centavos ao digitar (digitar `1850` vira `18,50`; `185000` vira `1.850,00`). Salvar e **reabrir**
+     → o valor inicial volta formatado.
+2. **Editar** produto; toggles rápidos **Disponível / Esgotado / Novidade / Oferta** (oferta pede
+   preço promocional < preço). O toggle **"Esgotado"** (também checkbox "Esgotado (sem estoque hoje)"
+   no formulário) deixa o produto **riscado/bloqueado** no cliente sem tirá-lo do cardápio (Suite 3).
 3. **Excluir** produto (confirmar).
 4. Aba **Categorias**: criar/editar (emoji, nome, ordem, ativa), **reordenar** (▲▼), **excluir** — bloqueia se houver produtos vinculados.
 5. No **editor de um produto salvo**: seção **"Adicionais e opções"** → marcar grupos (vincula), definir **ordem**, ver **preview** "Este produto terá: …". Em produto **novo**, a seção pede **salvar primeiro**.
@@ -193,7 +227,7 @@ Os valores em R$ dependem do seed (podem mudar). Asserte comportamento:
 1. Acessar via aba **"Adicionais"** no cardápio (link no topo).
 2. Cards de grupo com **regra em linguagem natural** (ex.: "Escolha única · obrigatório", "Múltipla · até 3 · opcional"), opções com **preço** ou **"grátis"**, e **toggle Ativo**.
 3. **+ Novo grupo** → criar **"Ponto da carne"**: seleção **única**, **obrigatório**, 3 opções (Mal/Ao Ponto/Bem) preço 0. Conferir que **min/max ficam escondidos** quando única.
-4. Criar **"Adicionais"**: seleção **múltipla**, definir máximo (ex.: até 3), opções **com preço** (Bacon, Cheddar…). Conferir que **min/max aparecem** quando múltipla.
+4. Criar **"Adicionais"**: seleção **múltipla**, definir máximo (ex.: até 3), opções **com preço** (Bacon, Cheddar…). Conferir que **min/max aparecem** quando múltipla. O campo de **preço da opção** usa **máscara de moeda** (centavos); opção sem preço = **grátis** (0).
 5. **Editar** grupo (add/edit/remove opção; preço/disponível). **Toggle ativo/inativo**.
 6. **Excluir** grupo → diálogo avisa **"será removido de N produtos"**.
 
@@ -278,6 +312,58 @@ nenhuma leitura/escrita cruza tenants.
 
 ---
 
+## Suite 17 — Garçom lança pedido pela tela de staff (`/garcom/nova-comanda`, `/garcom/pedido`) · [A]/[D] ✅
+**Objetivo:** o garçom monta e lança pedidos (atendimento na mesa, balcão/telefone), reaproveitando
+a RPC do servidor. A comanda só é efetivada no "Lançar pedido" (evita comanda-zumbi).
+1. Logar como **garçom/admin**. Em `/garcom`, tocar **"Nova comanda"** → `/garcom/nova-comanda`:
+   lista **só mesas ativas SEM comanda aberta** (busca + 3 estados; vazio = "Todas as mesas estão
+   com comanda aberta"). Tocar numa mesa → `/garcom/pedido?mesa=<id>`.
+2. Tela de **pedido**: busca com autofocus + **chips de categoria** ("Todos" + categorias). Lista de
+   produtos (reaproveita o card; **esgotado** aparece riscado e não abre). Tocar num produto com
+   **adicional obrigatório** → bottom-sheet exige a seleção (botão bloqueado até escolher) + opcionais
+   + obs + quantidade.
+3. **Carrinho local**: barra inferior "N itens · R$ Y" → **resumo** (stepper/remover por linha).
+4. **"Lançar pedido"** → cria/usa a comanda **da mesa** (find-or-create) e grava os itens numa
+   **transação** (RPC `lancar_pedido_garcom`, só IDs) → navega para `/garcom/comanda/<id>` + toast
+   **"Pedido lançado para a cozinha"**. **[D]** itens entram com `status='novo'` e **preço calculado
+   no servidor**; aparecem na **cozinha em tempo real** (e disparam o som — Suite 7).
+5. **Comanda existente**: na comanda aberta, tocar **"Novo pedido"** → `/garcom/pedido?comanda=<id>`;
+   lançar adiciona uma **nova rodada** na MESMA comanda.
+6. (Balcão/telefone) Mesmo com **pedidos pausados** (Suite 6), o garçom **consegue lançar** (o guard
+   de horário/pausa só barra o cliente anônimo).
+
+**Esperado:** mesa nova e comanda existente funcionam; preço/validação no servidor; nada de inserir item na mão.
+
+---
+
+## Suite 18 — Prevenção de comanda-zumbi: comanda vazia (`cancelar_comanda_vazia` + job) · [A]/[D] ✅
+**Objetivo:** comanda `aberta` **sem itens** não polui o painel nem prende a mesa. (Caso 2 — comanda
+COM itens abandonada — está fora de escopo no MVP.)
+1. Abrir `/mesa/<id de mesa livre>` como cliente (cria uma comanda vazia) e **sair sem pedir**.
+2. Como **garçom/admin**, abrir essa comanda em `/garcom/comanda/[id]` → estando **vazia**, o rodapé
+   mostra **"Cancelar comanda vazia"** (no lugar de "Encerrar e Cobrar"). Tocar → toast "Comanda
+   cancelada" e volta para `/garcom`.
+3. **[D]** A comanda fica `status='cancelada'`, `cancelamento_motivo='cancelada_garcom'`,
+   `cancelada_por` preenchido; a **mesa volta a aparecer livre** em "Nova comanda" (Suite 17).
+4. **Comanda COM itens não pode ser cancelada por aí:** numa comanda com itens, o rodapé mostra
+   "Encerrar e Cobrar" (não o cancelar). Chamar a RPC `cancelar_comanda_vazia` numa comanda com
+   itens **falha** com erro claro ("…possui itens.").
+5. **[D] Job pg_cron `expirar_comandas_vazias()`** (`*/5 * * * *`): comanda `aberta` **sem itens** com
+   `criado_em > 60 min` é cancelada (`motivo='expiracao_automatica'`); comanda com itens **nunca** é
+   tocada. Testar chamando a função na mão e checando o status:
+   ```sql
+   select public.expirar_comandas_vazias();
+   select status, cancelamento_motivo from comandas where id='<comanda-vazia-antiga>';
+   -- job agendado:
+   select jobname, schedule from cron.job where jobname='expirar-comandas-vazias';
+   ```
+6. **[D]** Dashboard/faturamento ignora `cancelada` (Suite 9); garçom não lista canceladas.
+
+**Esperado:** vazias somem com segurança (manual ou job > 60min); comandas com itens intactas; guard
+de race via `not exists (itens)`.
+
+---
+
 ## Anexo A — Mapa de rotas
 | Rota | Acesso | Função |
 |---|---|---|
@@ -287,7 +373,9 @@ nenhuma leitura/escrita cruza tenants.
 | `/mesa/[id]` | público (cliente) | abertura na mesa + cardápio + pedido + Minha Comanda |
 | `/cozinha` | admin, cozinha | painel de pedidos (status) |
 | `/garcom` | admin, garçom | lista de mesas/comandas abertas |
-| `/garcom/comanda/[id]` | admin, garçom | comanda detalhada + checkout |
+| `/garcom/nova-comanda` | admin, garçom | mesas livres p/ lançar pedido (Suite 17) |
+| `/garcom/pedido` | admin, garçom | montar/lançar pedido (mesa nova ou comanda) (Suite 17) |
+| `/garcom/comanda/[id]` | admin, garçom | comanda detalhada + checkout + cancelar vazia |
 | `/admin` | admin | dashboard |
 | `/admin/cardapio` | admin | produtos + categorias |
 | `/admin/cardapio/adicionais` | admin | grupos de adicionais |
@@ -336,6 +424,17 @@ Em FAIL, anotar rota, passo, esperado × obtido e qualquer erro de console/rede.
   protegidos (domínio do super-admin). → Suite 16 passo 7.
 - **Upload de foto:** policies do bucket `produtos` (010) permitem leitura pública + escrita
   autenticada. → Suite 16 passo 4.
+
+**Migrations recentes (012–015) — o que cada teste protege:**
+- **012** `produtos.esgotado` + guarda `'Produto esgotado'` na RPC `criar_item_pedido`. → Suites 3/10.
+- **013** RPC `lancar_pedido_garcom` (SECURITY DEFINER, transacional; reaproveita `criar_item_pedido`;
+  só admin/garçom; find-or-create da comanda da mesa). → Suite 17.
+- **014/015** status `cancelada` + auditoria; job pg_cron `expirar_comandas_vazias()` (>60min, sem
+  itens) e RPC `cancelar_comanda_vazia`. **O `db:reset` cria a extensão `pg_cron` localmente** (no
+  PRD, habilitar pg_cron no painel do Supabase antes do `db:push`). → Suites 9/18.
+
+> ℹ️ **Inputs de dinheiro** (preço, oferta, adicional, "valor recebido") usam **máscara de moeda em
+> centavos** (`fmt.moneyMask`/`moneyParse`). A **taxa de serviço** é percentual, não usa essa máscara.
 
 > Verificação rápida no banco (psql) — simular um usuário e conferir a RLS:
 > `begin; set local role authenticated; set local request.jwt.claims='{"sub":"<uid>"}'; <query>; rollback;`
