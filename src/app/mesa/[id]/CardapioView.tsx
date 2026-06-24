@@ -159,7 +159,7 @@ export default function CardapioView({ mesa, comandaId, onReset }: Props) {
           <div className="text-xs mb-1" style={{ color: 'var(--text-mid)' }}>
             {mesa.nome}{clienteNome ? ` · ${clienteNome.split(' ')[0]}` : ''}
           </div>
-          <BrandLogo logoUrl={rest?.logo_url} nome={rest?.nome} size="sm" showCobranding />
+          <BrandLogo logoUrl={rest?.logo_url} nome={rest?.nome} size="xl" shape="circle" showCobranding />
         </div>
         <button
           onClick={onReset}
