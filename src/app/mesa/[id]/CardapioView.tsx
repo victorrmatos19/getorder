@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import BrandLogo from '@/components/BrandLogo'
 import { deriveTheme } from '@/lib/theme'
@@ -87,10 +87,84 @@ export default function CardapioView({ mesa, comandaId, onReset }: Props) {
     return list
   }, [novidades, ofertas, categorias, produtosPorCategoria])
 
-  const activeSection = useMemo(
-    () => sections.find((s) => s.key === section) ?? sections[0],
-    [sections, section],
-  )
+  // Chip destacado: o do scroll-spy; antes do 1º scroll, cai na 1ª seção.
+  const activeChip: SectionKey | null = section ?? sections[0]?.key ?? null
+
+  // ── Scroll vertical contínuo (modelo iFood): scroll-spy + salto ──
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const sectionEls = useRef<Map<string, HTMLElement>>(new Map())
+  const chipEls = useRef<Map<string, HTMLButtonElement>>(new Map())
+  const isJumping = useRef(false)
+  const jumpTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const prefersReduced = () =>
+    typeof window !== 'undefined' &&
+    !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+
+  // Destaca o chip da seção visível conforme rola o container (não a window:
+  // o /mesa rola num container, então medimos offsetTop relativo a ele).
+  useEffect(() => {
+    const container = scrollRef.current
+    if (!container || sections.length === 0) return
+    let raf = 0
+    const update = () => {
+      raf = 0
+      if (isJumping.current) return
+      const scrollTop = container.scrollTop
+      const SPY_OFFSET = 24
+      let activeK: SectionKey = sections[0].key
+      const scrollable = container.scrollHeight - container.clientHeight > 4
+      const atBottom = scrollable && container.scrollHeight - scrollTop - container.clientHeight < 4
+      if (atBottom) {
+        activeK = sections[sections.length - 1].key
+      } else {
+        for (const s of sections) {
+          const el = sectionEls.current.get(s.key)
+          if (!el) continue
+          if (el.offsetTop <= scrollTop + SPY_OFFSET) activeK = s.key
+          else break
+        }
+      }
+      setSection((prev) => (prev === activeK ? prev : activeK))
+    }
+    const onScroll = () => { if (!raf) raf = requestAnimationFrame(update) }
+    container.addEventListener('scroll', onScroll, { passive: true })
+    update()
+    return () => {
+      container.removeEventListener('scroll', onScroll)
+      if (raf) cancelAnimationFrame(raf)
+    }
+  }, [sections])
+
+  // Centraliza o chip ativo na barra horizontal (block:'nearest' = não rola na vertical).
+  useEffect(() => {
+    if (!activeChip) return
+    chipEls.current.get(activeChip)?.scrollIntoView({
+      inline: 'center',
+      block: 'nearest',
+      behavior: prefersReduced() ? 'auto' : 'smooth',
+    })
+  }, [activeChip])
+
+  // Limpa o timer do salto ao desmontar.
+  useEffect(() => () => { if (jumpTimer.current) clearTimeout(jumpTimer.current) }, [])
+
+  // Tap no chip: salta até a seção (parando logo abaixo da barra fixa) e
+  // trava o spy durante o salto programático pra não brigar com o clique.
+  const jumpToSection = (key: SectionKey) => {
+    const container = scrollRef.current
+    const el = sectionEls.current.get(key)
+    if (!container || !el) return
+    isJumping.current = true
+    setSection(key)
+    const JUMP_OFFSET = 8
+    container.scrollTo({
+      top: Math.max(0, el.offsetTop - JUMP_OFFSET),
+      behavior: prefersReduced() ? 'auto' : 'smooth',
+    })
+    if (jumpTimer.current) clearTimeout(jumpTimer.current)
+    jumpTimer.current = setTimeout(() => { isJumping.current = false }, 650)
+  }
 
   const cartCount = cart.reduce((a, l) => a + l.quantidade, 0)
   const cartTotal = useMemo(() => totalCart(cart), [cart])
@@ -152,7 +226,7 @@ export default function CardapioView({ mesa, comandaId, onReset }: Props) {
   }
 
   return (
-    <div className="min-h-screen flex flex-col relative" style={{ ...themeVars, background: 'var(--bg)' }}>
+    <div className="h-[100dvh] flex flex-col relative overflow-hidden" style={{ ...themeVars, background: 'var(--bg)' }}>
       {/* Header */}
       <div className="px-6 pt-4 pb-3 flex items-start justify-between">
         <div className="min-w-0">
@@ -220,20 +294,20 @@ export default function CardapioView({ mesa, comandaId, onReset }: Props) {
 
       {tab === 'cardapio' && (
         <>
-          <div
-            className="flex gap-2 px-6 py-3 overflow-x-auto"
-            style={{ scrollSnapType: 'x mandatory' }}
-          >
+          <div className="flex gap-2 px-6 py-3 overflow-x-auto">
             {sections.map((s) => {
-              const active = (activeSection?.key ?? null) === s.key
+              const active = activeChip === s.key
               const accent = s.key === 'ofertas' || s.key === 'novidades'
               return (
                 <button
                   key={s.key}
-                  onClick={() => setSection(s.key)}
+                  ref={(el) => {
+                    if (el) chipEls.current.set(s.key, el)
+                    else chipEls.current.delete(s.key)
+                  }}
+                  onClick={() => jumpToSection(s.key)}
                   className="px-4 py-2 rounded-xl text-sm whitespace-nowrap shrink-0"
                   style={{
-                    scrollSnapAlign: 'start',
                     background: active ? (accent ? 'var(--accent)' : 'var(--ink)') : 'transparent',
                     color: active ? (accent ? 'var(--on-accent)' : '#FAF9F5') : (accent ? 'var(--accent)' : 'var(--text-mid)'),
                     border: active
@@ -249,7 +323,9 @@ export default function CardapioView({ mesa, comandaId, onReset }: Props) {
             })}
           </div>
 
-          <div className="flex-1 overflow-y-auto px-6 pb-32" key={activeSection?.key ?? 'empty'}>
+          {/* Corpo: todas as seções empilhadas num único scroll vertical (modelo iFood).
+              relative = vira offsetParent das seções, pra o scroll-spy medir offsetTop nele. */}
+          <div ref={scrollRef} className="flex-1 overflow-y-auto relative px-6 pb-32">
             {(produtosQ.isLoading || categoriasQ.isLoading) && (
               <div className="py-16 flex justify-center"><Spinner size={20} color="var(--accent)" /></div>
             )}
@@ -268,14 +344,37 @@ export default function CardapioView({ mesa, comandaId, onReset }: Props) {
             {!produtosQ.isLoading && !produtosQ.isError && sections.length === 0 && (
               <EmptyState icon="🍽️" title="Nada por aqui ainda" description="Volte mais tarde." />
             )}
-            {(activeSection?.items ?? []).map((p, i, arr) => (
-              <ProductCard
-                key={p.id}
-                produto={p}
-                isLast={i === arr.length - 1}
-                onOpen={() => setDetalhe(p)}
-              />
-            ))}
+            {sections.map((s) => {
+              const accent = s.key === 'ofertas' || s.key === 'novidades'
+              return (
+                <section
+                  key={s.key}
+                  ref={(el) => {
+                    if (el) sectionEls.current.set(s.key, el)
+                    else sectionEls.current.delete(s.key)
+                  }}
+                  className="pt-5 first:pt-3"
+                >
+                  <div className="flex items-center gap-2 mb-3">
+                    {s.emoji && <span aria-hidden className="text-base leading-none">{s.emoji}</span>}
+                    <h2
+                      className="serif text-xl"
+                      style={{ color: accent ? 'var(--accent)' : 'var(--ink)', fontWeight: 500 }}
+                    >
+                      {s.label}
+                    </h2>
+                  </div>
+                  {s.items.map((p, i, arr) => (
+                    <ProductCard
+                      key={p.id}
+                      produto={p}
+                      isLast={i === arr.length - 1}
+                      onOpen={() => setDetalhe(p)}
+                    />
+                  ))}
+                </section>
+              )
+            })}
           </div>
 
           {cart.length > 0 && (
