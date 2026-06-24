@@ -113,7 +113,7 @@ export default function GarcomList() {
             const borderCard = temPronto ? 'var(--status-ready)' : 'var(--line)'
             const corTexto = temPronto ? 'var(--bg)' : 'var(--ink)'
             const corSub = temPronto ? 'rgba(250,249,245,0.78)' : 'var(--text-mid)'
-            const corPreco = temPronto ? 'var(--bg)' : 'var(--accent)'
+            const corPreco = temPronto ? 'var(--bg)' : 'var(--price)'
             const corSeta = temPronto ? 'rgba(250,249,245,0.78)' : 'var(--muted)'
             const corLinha = temPronto ? 'rgba(255,255,255,0.18)' : 'var(--line)'
 

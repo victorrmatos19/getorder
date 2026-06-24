@@ -133,7 +133,7 @@ export default function AdicionaisPage() {
                       <span className="truncate">
                         {a.nome}{!a.disponivel && ' · indisponível'}
                       </span>
-                      <span className="mono-num shrink-0 ml-2" style={{ color: a.preco > 0 ? 'var(--accent)' : 'var(--text-mid)' }}>
+                      <span className="mono-num shrink-0 ml-2" style={{ color: a.preco > 0 ? 'var(--price)' : 'var(--text-mid)' }}>
                         {a.preco > 0 ? `+ ${fmt.currency(a.preco)}` : 'grátis'}
                       </span>
                     </li>

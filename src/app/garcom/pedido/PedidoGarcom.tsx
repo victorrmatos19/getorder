@@ -241,7 +241,7 @@ export default function PedidoGarcom({ mesaId, comandaId }: Props) {
                       <div key={a.id} className="text-xs mt-0.5 flex items-center gap-1" style={{ color: 'var(--text-mid)' }}>
                         <span>+ {a.nome}</span>
                         {a.preco > 0 && (
-                          <span className="mono-num" style={{ color: 'var(--accent)' }}>({fmt.currency(a.preco)})</span>
+                          <span className="mono-num" style={{ color: 'var(--price)' }}>({fmt.currency(a.preco)})</span>
                         )}
                       </div>
                     ))}
@@ -262,7 +262,7 @@ export default function PedidoGarcom({ mesaId, comandaId }: Props) {
             </div>
             <div className="flex justify-between items-baseline pt-3 mb-6" style={{ borderTop: '1px solid var(--line)' }}>
               <span className="text-base" style={{ color: 'var(--ink)' }}>Total</span>
-              <span className="serif mono-num text-xl" style={{ color: 'var(--accent)', fontWeight: 600 }}>
+              <span className="serif mono-num text-xl" style={{ color: 'var(--price)', fontWeight: 600 }}>
                 {fmt.currency(cartTotal)}
               </span>
             </div>

@@ -59,7 +59,7 @@ export default function CardapioView({ mesa, comandaId, onReset }: Props) {
   const podeReceber = disponibilidadeQ.data?.podeReceber ?? true
   const rest = disponibilidadeQ.data?.restaurante
   // Marca do restaurante (white-label): injeta os tokens derivados no container raiz.
-  const themeVars = deriveTheme(rest?.cor_primaria, rest?.cor_accent) as React.CSSProperties
+  const themeVars = deriveTheme(rest?.cor_primaria, rest?.cor_accent, rest?.cor_preco) as React.CSSProperties
 
   const novidades = useMemo(() => produtos.filter((p) => p.novidade), [produtos])
   const ofertas   = useMemo(() => produtos.filter((p) => p.em_oferta && !p.novidade), [produtos])
@@ -348,7 +348,7 @@ export default function CardapioView({ mesa, comandaId, onReset }: Props) {
                       <div key={a.id} className="text-xs mt-0.5 flex items-center gap-1" style={{ color: 'var(--text-mid)' }}>
                         <span>+ {a.nome}</span>
                         {a.preco > 0 && (
-                          <span className="mono-num" style={{ color: 'var(--accent)' }}>({fmt.currency(a.preco)})</span>
+                          <span className="mono-num" style={{ color: 'var(--price)' }}>({fmt.currency(a.preco)})</span>
                         )}
                       </div>
                     ))}
@@ -374,7 +374,7 @@ export default function CardapioView({ mesa, comandaId, onReset }: Props) {
               <span className="text-base" style={{ color: 'var(--ink)' }}>Total</span>
               <span
                 className="serif mono-num text-xl"
-                style={{ color: 'var(--accent)', fontWeight: 600 }}
+                style={{ color: 'var(--price)', fontWeight: 600 }}
               >
                 {fmt.currency(cartTotal)}
               </span>
@@ -525,7 +525,7 @@ function MinhaComanda({
                           <div key={a.id} className="text-xs flex items-center gap-1" style={{ color: 'var(--text-mid)' }}>
                             <span>+ {a.nome_snapshot}</span>
                             {a.preco_snapshot > 0 && (
-                              <span className="mono-num" style={{ color: 'var(--accent)' }}>
+                              <span className="mono-num" style={{ color: 'var(--price)' }}>
                                 ({fmt.currency(a.preco_snapshot)})
                               </span>
                             )}
@@ -632,7 +632,7 @@ function MinhaComanda({
           <span className="text-sm font-bold" style={{ color: 'var(--ink)' }}>Total</span>
           <span
             className="serif mono-num text-xl"
-            style={{ color: 'var(--accent)', fontWeight: 600 }}
+            style={{ color: 'var(--price)', fontWeight: 600 }}
           >
             {fmt.currency(total)}
           </span>

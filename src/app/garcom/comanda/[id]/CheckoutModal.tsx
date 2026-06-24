@@ -115,7 +115,7 @@ export default function CheckoutModal({
           </div>
           <div
             className="serif mono-num text-2xl my-4"
-            style={{ color: 'var(--accent)', fontWeight: 500 }}
+            style={{ color: 'var(--price)', fontWeight: 500 }}
           >
             {fmt.currency(success.total)} recebido
           </div>
@@ -189,7 +189,7 @@ export default function CheckoutModal({
             </span>
             <span
               className="serif mono-num text-4xl"
-              style={{ color: 'var(--accent)', fontWeight: 500, lineHeight: 1 }}
+              style={{ color: 'var(--price)', fontWeight: 500, lineHeight: 1 }}
             >
               {fmt.currency(total)}
             </span>
@@ -214,7 +214,7 @@ export default function CheckoutModal({
                 <div key={a.id} className="text-xs mt-0.5 flex items-center gap-1" style={{ color: 'var(--text-mid)' }}>
                   <span>+ {a.nome_snapshot}</span>
                   {a.preco_snapshot > 0 && (
-                    <span className="mono-num" style={{ color: 'var(--accent)' }}>({fmt.currency(a.preco_snapshot)})</span>
+                    <span className="mono-num" style={{ color: 'var(--price)' }}>({fmt.currency(a.preco_snapshot)})</span>
                   )}
                 </div>
               ))}
@@ -321,7 +321,7 @@ export default function CheckoutModal({
                 style={{ borderTop: '1px solid var(--line)' }}
               >
                 <span className="text-sm" style={{ color: 'var(--text-mid)' }}>Valor por pessoa</span>
-                <span className="serif mono-num text-lg" style={{ color: 'var(--accent)', fontWeight: 500 }}>
+                <span className="serif mono-num text-lg" style={{ color: 'var(--price)', fontWeight: 500 }}>
                   {fmt.currency(valorPorPessoa)}
                 </span>
               </div>

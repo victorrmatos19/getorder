@@ -243,7 +243,7 @@ export default function ComandaDetalhe({ comandaId }: { comandaId: string }) {
                           <div key={a.id} className="text-xs flex items-center gap-1" style={{ color: 'var(--text-mid)' }}>
                             <span>+ {a.nome_snapshot}</span>
                             {a.preco_snapshot > 0 && (
-                              <span className="mono-num" style={{ color: 'var(--accent)' }}>
+                              <span className="mono-num" style={{ color: 'var(--price)' }}>
                                 ({fmt.currency(a.preco_snapshot)})
                               </span>
                             )}
@@ -355,7 +355,7 @@ export default function ComandaDetalhe({ comandaId }: { comandaId: string }) {
           <span className="text-sm" style={{ color: 'var(--ink)' }}>Subtotal</span>
           <span
             className="serif mono-num text-2xl"
-            style={{ color: 'var(--accent)', fontWeight: 500, lineHeight: 1 }}
+            style={{ color: 'var(--price)', fontWeight: 500, lineHeight: 1 }}
           >
             {fmt.currency(subtotal)}
           </span>

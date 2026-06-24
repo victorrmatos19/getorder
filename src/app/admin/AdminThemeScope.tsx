@@ -12,6 +12,7 @@ export default function AdminThemeScope({ children }: { children: React.ReactNod
     <ThemeScope
       primaria={restaurante?.cor_primaria}
       accent={restaurante?.cor_accent}
+      preco={restaurante?.cor_preco}
       className="min-h-screen flex flex-col pb-20"
       style={{ background: 'var(--bg)' }}
     >

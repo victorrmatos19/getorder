@@ -84,6 +84,20 @@ export function clampForButton(hex: string): string {
   return out
 }
 
+// Cor usada como TEXTO de preço sobre o fundo claro (off-white). Aqui a própria cor é o
+// texto, então o guard é mais forte: escurece até contraste AA (4.5) contra a página.
+export function clampForText(hex: string): string {
+  const pageBg = hexToRgb(PAGE_BG)!
+  let out = hex
+  for (let i = 0; i < 14; i++) {
+    const rgb = hexToRgb(out)
+    if (!rgb) return hex
+    if (contrastRatio(rgb, pageBg) >= 4.5) break
+    out = darken(out, 0.08)
+  }
+  return out
+}
+
 export type ThemeTokens = Record<string, string>
 
 // Conjunto de tokens personalizáveis (sobrescreve o :root). NÃO mexe em
@@ -91,10 +105,14 @@ export type ThemeTokens = Record<string, string>
 export function deriveTheme(
   primaria: string | null | undefined,
   accent: string | null | undefined,
+  corPreco?: string | null | undefined,
   opts?: { dark?: boolean },
 ): ThemeTokens {
   const primary = clampForButton(hexToRgb(primaria) ? (primaria as string) : DEFAULT_PRIMARY)
   const acc = clampForButton(hexToRgb(accent) ? (accent as string) : DEFAULT_ACCENT)
+  // Cor dos preços: se definida, clampa p/ legibilidade no fundo claro; senão cai no accent
+  // (retrocompatível — o preço usava var(--accent)).
+  const price = hexToRgb(corPreco) ? clampForText(corPreco as string) : acc
 
   let primaryDk = darken(primary, 0.28)
   // Cozinha (dark): o fundo do app é --primary-dk. Se ficar claro demais, cai para o neutro escuro.
@@ -112,5 +130,6 @@ export function deriveTheme(
     '--accent-lt': lighten(acc, 0.28),
     '--on-primary': pickTextOn(primary),
     '--on-accent': pickTextOn(acc),
+    '--price': price,
   }
 }

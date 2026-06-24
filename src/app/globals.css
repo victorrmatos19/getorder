@@ -15,6 +15,9 @@
   --on-primary: #FAF9F5;
   --on-accent: #FAF9F5;
 
+  /* Cor do texto dos preços (default = accent; white-label pode desacoplar via cor_preco). */
+  --price: #9B4A3C;
+
   --bg: #FAF9F5;
   --surface: #F2F0E8;
   --line: #DDD9CC;

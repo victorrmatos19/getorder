@@ -130,7 +130,7 @@ export default function ProdutoDetalhe({ produto, bloqueado, onClose, onAddToCar
 
         <div className="flex items-baseline justify-between gap-3">
           <div className="serif text-2xl" style={{ color: 'var(--ink)', lineHeight: 1.1 }}>{produto.nome}</div>
-          <div className="mono-num text-base font-bold shrink-0" style={{ color: 'var(--accent)' }}>
+          <div className="mono-num text-base font-bold shrink-0" style={{ color: 'var(--price)' }}>
             {fmt.currency(produto.preco)}
           </div>
         </div>
@@ -217,7 +217,7 @@ export default function ProdutoDetalhe({ produto, bloqueado, onClose, onAddToCar
                       </span>
                       <span className="flex-1 text-sm" style={{ color: 'var(--ink)' }}>{a.nome}</span>
                       {a.preco > 0 && (
-                        <span className="mono-num text-sm shrink-0" style={{ color: 'var(--accent)' }}>
+                        <span className="mono-num text-sm shrink-0" style={{ color: 'var(--price)' }}>
                           + {fmt.currency(a.preco)}
                         </span>
                       )}

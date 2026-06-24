@@ -21,6 +21,7 @@ export default function MarcaTab() {
   const [nome, setNome] = useState('')
   const [primaria, setPrimaria] = useState('') // '' = usar padrão GetOrder
   const [accent, setAccent] = useState('')
+  const [preco, setPreco] = useState('') // '' = usar o accent (preço)
   const [logoUrl, setLogoUrl] = useState<string | null>(null)
   const [file, setFile] = useState<File | null>(null)
   const [preview, setPreview] = useState<string | null>(null)
@@ -44,6 +45,7 @@ export default function MarcaTab() {
           setNome(r.nome)
           setPrimaria(r.cor_primaria ?? '')
           setAccent(r.cor_accent ?? '')
+          setPreco(r.cor_preco ?? '')
           setLogoUrl(r.logo_url)
           setPreview(r.logo_url)
         }
@@ -64,12 +66,13 @@ export default function MarcaTab() {
   }
 
   const removeLogo = () => { setFile(null); setPreview(null); setLogoUrl(null) }
-  const usarPadrao = () => { setPrimaria(''); setAccent(''); setErr('') }
+  const usarPadrao = () => { setPrimaria(''); setAccent(''); setPreco(''); setErr('') }
 
   const save = async () => {
     if (!rest || !restauranteId) return
     if (primaria && !HEX.test(primaria)) { setErr('Cor primária inválida (use #RRGGBB).'); return }
     if (accent && !HEX.test(accent)) { setErr('Cor de destaque inválida (use #RRGGBB).'); return }
+    if (preco && !HEX.test(preco)) { setErr('Cor dos preços inválida (use #RRGGBB).'); return }
     setBusy(true)
     setErr('')
     try {
@@ -92,6 +95,7 @@ export default function MarcaTab() {
         .update({
           cor_primaria: primaria || null,
           cor_accent: accent || null,
+          cor_preco: preco || null,
           logo_url: foto,
         })
         .eq('id', restauranteId)
@@ -114,6 +118,7 @@ export default function MarcaTab() {
 
   const previewPrimaria = primaria || null
   const previewAccent = accent || null
+  const previewPreco = preco || null
 
   return (
     <div className="flex-1 overflow-y-auto px-6 py-6 max-w-md w-full">
@@ -168,13 +173,24 @@ export default function MarcaTab() {
         />
         <div className="mt-4">
           <ColorField
-            label="Cor de destaque (botões, preços)"
+            label="Cor de destaque (botões / CTAs)"
             value={accent}
             fallback={DEFAULT_ACCENT}
             onChange={(v) => { setAccent(v); setErr('') }}
           />
         </div>
-        {(primaria || accent) && (
+        <div className="mt-4">
+          <ColorField
+            label="Cor dos preços"
+            value={preco}
+            fallback={accent || DEFAULT_ACCENT}
+            onChange={(v) => { setPreco(v); setErr('') }}
+          />
+          <div className="text-xs mt-1" style={{ color: 'var(--muted)' }}>
+            Vazio = usa a cor de destaque. É escurecida automaticamente se for clara demais para o fundo claro.
+          </div>
+        </div>
+        {(primaria || accent || preco) && (
           <button
             onClick={usarPadrao}
             className="mt-4 text-xs underline"
@@ -191,6 +207,7 @@ export default function MarcaTab() {
         <ThemeScope
           primaria={previewPrimaria}
           accent={previewAccent}
+          preco={previewPreco}
           className="rounded-xl overflow-hidden"
           style={{ border: '1px solid var(--line)' }}
         >
@@ -206,7 +223,7 @@ export default function MarcaTab() {
             </div>
             <div className="rounded-xl p-3 mb-3" style={{ background: 'var(--surface)', border: '1px solid var(--line)' }}>
               <div style={{ color: 'var(--ink)', fontWeight: 600 }}>Produto exemplo</div>
-              <div className="mono-num" style={{ color: 'var(--accent)', fontWeight: 700 }}>R$ 18,00</div>
+              <div className="mono-num" style={{ color: 'var(--price)', fontWeight: 700 }}>R$ 18,00</div>
             </div>
             <button
               className="w-full rounded-lg text-sm font-bold"

@@ -6,6 +6,7 @@ import { deriveTheme } from '@/lib/theme'
 type Props = {
   primaria: string | null | undefined
   accent: string | null | undefined
+  preco?: string | null | undefined
   dark?: boolean
   className?: string
   style?: CSSProperties
@@ -19,8 +20,8 @@ type Props = {
  * cascateiam para todos os filhos. Cores nulas → `deriveTheme` devolve os defaults do
  * GetOrder (zero regressão). Não usa `dangerouslySetInnerHTML` nem muta o document.
  */
-export default function ThemeScope({ primaria, accent, dark, className, style, children }: Props) {
-  const tokens = deriveTheme(primaria, accent, { dark }) as Record<string, string>
+export default function ThemeScope({ primaria, accent, preco, dark, className, style, children }: Props) {
+  const tokens = deriveTheme(primaria, accent, preco, { dark }) as Record<string, string>
   return (
     <div className={className} style={{ ...(tokens as CSSProperties), ...style }}>
       {children}

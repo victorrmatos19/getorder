@@ -7,7 +7,7 @@ import { useRestaurante } from '@/lib/contexts/RestauranteContext'
 export default function GarcomThemeScope({ children }: { children: React.ReactNode }) {
   const { restaurante } = useRestaurante()
   return (
-    <ThemeScope primaria={restaurante?.cor_primaria} accent={restaurante?.cor_accent}>
+    <ThemeScope primaria={restaurante?.cor_primaria} accent={restaurante?.cor_accent} preco={restaurante?.cor_preco}>
       {children}
     </ThemeScope>
   )

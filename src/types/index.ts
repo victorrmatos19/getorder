@@ -5,6 +5,7 @@ export type Restaurante = {
   logo_url: string | null
   cor_primaria: string | null
   cor_accent: string | null
+  cor_preco: string | null
   ativo: boolean
   taxa_servico_percentual: number
   taxa_servico_obrigatoria: boolean

@@ -110,6 +110,7 @@ export default function CozinhaPanel() {
   const themeVars = deriveTheme(
     restaurante?.cor_primaria,
     restaurante?.cor_accent,
+    restaurante?.cor_preco,
     { dark: true },
   ) as React.CSSProperties
 

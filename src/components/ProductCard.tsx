@@ -72,7 +72,7 @@ export default function ProductCard({ produto, onOpen, isLast }: Props) {
             )}
             <span
               className={`mono-num text-base font-bold${isEsgotado ? ' line-through' : ''}`}
-              style={{ color: isEsgotado ? 'var(--muted)' : 'var(--accent)' }}
+              style={{ color: isEsgotado ? 'var(--muted)' : 'var(--price)' }}
             >
               {fmt.currency(isOferta ? produto.oferta_preco! : produto.preco)}
             </span>
