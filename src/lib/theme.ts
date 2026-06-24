@@ -70,15 +70,17 @@ function mix(hex: string, target: Rgb, amount: number): string {
 export const darken = (hex: string, amount: number) => mix(hex, { r: 0, g: 0, b: 0 }, amount)
 export const lighten = (hex: string, amount: number) => mix(hex, { r: 255, g: 255, b: 255 }, amount)
 
-// Se a cor é clara demais para servir de FUNDO de botão (some no off-white da página),
-// escurece até ter contraste mínimo contra o fundo claro. Evita botão "invisível".
-export function clampForButton(hex: string): string {
-  const pageBg = hexToRgb(PAGE_BG)!
+// Cor usada como FUNDO (botão/CTA/header): mantém a cor EXATA (fidelidade da marca).
+// O texto por cima é escolhido por pickTextOn; só escurece o fundo em ÚLTIMO RECURSO,
+// no caso raro de luminância intermediária em que NEM texto claro NEM escuro atinge AA.
+export function clampBgForText(hex: string): string {
+  const light = hexToRgb(TEXT_LIGHT)!
+  const dark = hexToRgb(TEXT_DARK)!
   let out = hex
   for (let i = 0; i < 14; i++) {
     const rgb = hexToRgb(out)
     if (!rgb) return hex
-    if (contrastRatio(rgb, pageBg) >= 1.9) break
+    if (Math.max(contrastRatio(rgb, light), contrastRatio(rgb, dark)) >= 4.5) break
     out = darken(out, 0.08)
   }
   return out
@@ -108,11 +110,14 @@ export function deriveTheme(
   corPreco?: string | null | undefined,
   opts?: { dark?: boolean },
 ): ThemeTokens {
-  const primary = clampForButton(hexToRgb(primaria) ? (primaria as string) : DEFAULT_PRIMARY)
-  const acc = clampForButton(hexToRgb(accent) ? (accent as string) : DEFAULT_ACCENT)
-  // Cor dos preços: se definida, clampa p/ legibilidade no fundo claro; senão cai no accent
-  // (retrocompatível — o preço usava var(--accent)).
-  const price = hexToRgb(corPreco) ? clampForText(corPreco as string) : acc
+  const primBase = hexToRgb(primaria) ? (primaria as string) : DEFAULT_PRIMARY
+  const accBase = hexToRgb(accent) ? (accent as string) : DEFAULT_ACCENT
+  // Fundos (botões/CTAs/headers): cor EXATA, texto adapta por cima (fidelidade da marca).
+  const primary = clampBgForText(primBase)
+  const acc = clampBgForText(accBase)
+  // Cor dos preços é TEXTO sobre fundo claro → sempre clampForText (legibilidade), inclusive
+  // no fallback do accent (que agora é fiel/possivelmente claro).
+  const price = clampForText(hexToRgb(corPreco) ? (corPreco as string) : accBase)
 
   let primaryDk = darken(primary, 0.28)
   // Cozinha (dark): o fundo do app é --primary-dk. Se ficar claro demais, cai para o neutro escuro.
