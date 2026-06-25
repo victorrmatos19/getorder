@@ -44,9 +44,19 @@ export async function updateSession(request: NextRequest) {
   if (isProtected && user) {
     const { data: perfil } = await supabase
       .from('perfis')
-      .select('role')
+      .select('role, ativo')
       .eq('id', user.id)
       .maybeSingle()
+
+    // Conta desativada: barra imediatamente (defense in depth). O ban no Auth
+    // bloqueia novo login/refresh, mas um access token já emitido vive até
+    // expirar — aqui fechamos a janela a cada navegação.
+    if (perfil && perfil.ativo === false) {
+      const url = request.nextUrl.clone()
+      url.pathname = '/login'
+      url.searchParams.set('inactive', '1')
+      return NextResponse.redirect(url)
+    }
 
     const role = perfil?.role
     const allowed =

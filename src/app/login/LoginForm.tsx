@@ -18,13 +18,20 @@ export default function LoginForm() {
   const router = useRouter()
   const sp = useSearchParams()
   const forbidden = sp.get('forbidden') === '1'
+  const inactive = sp.get('inactive') === '1'
   const nextPath = sp.get('next') || ''
 
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [focus, setFocus] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
-  const [err, setErr] = useState(forbidden ? 'Acesso não autorizado para este usuário.' : '')
+  const [err, setErr] = useState(
+    inactive
+      ? 'Conta desativada. Procure o administrador do restaurante.'
+      : forbidden
+        ? 'Acesso não autorizado para este usuário.'
+        : '',
+  )
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -54,7 +61,9 @@ export default function LoginForm() {
       const dest = nextPath || DEFAULT_BY_ROLE[role]
       router.replace(dest)
     } catch (e: any) {
-      setErr(e.message || 'Credenciais inválidas.')
+      // Usuário desativado é "banido" no Auth → mensagem amigável (alinha com ?inactive=1).
+      const banido = /banned/i.test(e?.message || '')
+      setErr(banido ? 'Conta desativada. Procure o administrador do restaurante.' : (e.message || 'Credenciais inválidas.'))
       setBusy(false)
     }
   }

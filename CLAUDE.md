@@ -588,6 +588,10 @@ Realtime); UPDATE (mover card) e a carga inicial (useQuery) **não** tocam.
                                máscara de moeda (R$) — ver "Formatação"
 - /admin/cardapio/adicionais → CRUD de grupos de adicionais reutilizáveis + suas opções
 - /admin/mesas               → CRUD mesas, gerar QR Code com qrcode.react
+- /admin/usuarios            → Gestão da equipe: admin cria/edita garçom e cozinha do
+                               próprio restaurante (nome, e-mail, senha inicial), troca role,
+                               reseta senha e desativa/reativa. Toda escrita via endpoints
+                               server-side com service_role — ver "Gestão de usuários"
 - /admin/configuracoes       → Taxa, horário, pausa de pedidos
 ```
 
@@ -741,6 +745,7 @@ npm run db:status    # mostra URLs e chaves locais
   - `013_lancar_pedido_garcom.sql` — RPC `lancar_pedido_garcom` (lançamento manual pelo garçom).
   - `014_comanda_status_cancelada.sql` — valor `'cancelada'` no enum `comanda_status` (separada: enum só usável após commit).
   - `015_prevencao_comanda_zumbi.sql` — auditoria + job pg_cron `expirar_comandas_vazias()` + RPC `cancelar_comanda_vazia`.
+  - `019_perfis_nome_ativo.sql` — colunas `perfis.nome` + `perfis.ativo` (gestão de equipe pelo admin; soft-delete).
 - `supabase/seed.sql` = dump dos **dados do PRD** (public + auth). **Gitignored** (dados reais +
   hashes). Para recriá-lo: `npx supabase db dump --linked --data-only -f supabase/seed.sql`.
 
@@ -880,6 +885,12 @@ Itens legados (sem `preco_base_snapshot`) caem no fallback `produto.preco`.
 - [x] Dashboard admin v2 (gerencial): período + comparação Δ%, tendência, ranking de produtos,
       mix de pagamento, heatmap dia×hora, qualidade/giro, "ao vivo de hoje" (realtime) e export CSV
       (`src/app/admin/dashboard/*`, `lib/periodo.ts`, `lib/exportCsv.ts`; sem nova dependência)
+- [x] Gestão de usuários do restaurante (migration 019): admin cria/gerencia **garçom e cozinha**
+      do próprio tenant em `/admin/usuarios` (nome/e-mail/senha inicial, trocar role, resetar senha,
+      desativar↔reativar). Escrita 100% via endpoints server-side com `service_role`
+      (`/api/admin/usuarios` GET+POST, `[id]` PATCH); caller validado e `restaurante_id`/role
+      derivados no servidor (`lib/auth/requireAdmin.ts`) — admin não cria admin/super_admin nem mexe
+      em outro tenant. "Remover" = `ativo=false` + ban no Auth; middleware checa `ativo` (defense in depth)
 
 ## ⏳ Gaps conhecidos (roadmap)
 
@@ -946,6 +957,9 @@ Itens legados (sem `preco_base_snapshot`) caem no fallback `produto.preco`.
 - ❌ Não cachear dados de pedido/Supabase no service worker — sempre `NetworkOnly`/rede (sem cache agressivo).
 - ❌ Não testar a PWA com `next dev` (serwist desligado em dev) nem por `http://<IP>` no celular
   (SW exige HTTPS/localhost) — usar `next build && next start` e a produção HTTPS / túnel.
+- ❌ Não criar/alterar usuários (`perfis` + Auth) a partir do client — só pelos endpoints
+  `/api/admin/usuarios` (service_role). O `restaurante_id` e o `role` saem do perfil do caller no
+  servidor (`requireAdmin`), nunca do request; o admin só cria/edita `garcom`/`cozinha` do próprio tenant.
 
 ---
 
@@ -978,5 +992,8 @@ conexão (hook `useCozinhaAlerta`); garçom card verde quando há item pronto; p
 (migration 012); máscara de moeda nos inputs de preço; garçom lança pedido pela tela de staff
 (migration 013, RPC `lancar_pedido_garcom`); prevenção de comanda-zumbi Caso 1 (migrations 014/015:
 job pg_cron + `cancelar_comanda_vazia`); dashboard admin v2 (período + comparação Δ% + tendência +
-produtos + mix + heatmap + qualidade/giro + export CSV). Migrations 001–007 arquivadas.
-**Versão do produto:** 0.6.0 — MVP em produção (mesa fixa + adicionais + esgotado + lançamento garçom + anti comanda-zumbi + dashboard v2)
+produtos + mix + heatmap + qualidade/giro + export CSV); cardápio em rolagem vertical contínua com
+scroll-spy (modelo iFood); gestão de usuários pelo admin (migration 019: `/admin/usuarios` + endpoints
+`/api/admin/usuarios` com service_role — cria/gerencia garçom e cozinha, desativar = soft-delete + ban).
+Migrations 001–007 arquivadas.
+**Versão do produto:** 0.6.0 — MVP em produção (mesa fixa + adicionais + esgotado + lançamento garçom + anti comanda-zumbi + dashboard v2 + gestão de equipe)

@@ -9,7 +9,27 @@ import EmptyState from '@/components/EmptyState'
 import CardapioView from './CardapioView'
 import type { Mesa } from '@/types'
 
-type Status = 'loading' | 'no-mesa' | 'ready' | 'closed' | 'error'
+// Estados separados de "mesa indisponível" para a falha se auto-explicar:
+//  - not-found  : a leitura voltou 0 linhas (QR aponta p/ mesa inexistente)
+//  - inactive   : a mesa existe mas está ativo=false
+//  - read-error : a query falhou (RLS/permissão/rede) — antes isso se mascarava de "not-found"
+type Status = 'loading' | 'not-found' | 'inactive' | 'read-error' | 'ready' | 'closed' | 'error'
+
+// Leitura da mesa com pequenas retentativas (400ms, 800ms). Cobre a janela logo
+// após criar a mesa, blip de rede (comum em celular/webview) e propagação. Sai na
+// 1ª leitura que retornar a linha; só insiste enquanto não houver `data`.
+async function lerMesaComRetry(
+  supabase: ReturnType<typeof createClient>,
+  mesaId: string,
+  tentativas = 3,
+) {
+  let last = await supabase.from('mesas').select('*').eq('id', mesaId).maybeSingle()
+  for (let i = 1; i < tentativas && !last.data; i++) {
+    await new Promise((r) => setTimeout(r, 400 * i))
+    last = await supabase.from('mesas').select('*').eq('id', mesaId).maybeSingle()
+  }
+  return last
+}
 
 export default function MesaPage() {
   const params = useParams<{ id: string }>()
@@ -21,19 +41,34 @@ export default function MesaPage() {
   const [nonce, setNonce] = useState(0)
 
   useEffect(() => {
-    const supabase = createClient()
+    // no-store: a leitura pública da mesa nunca vem de cache (ver client.ts).
+    const supabase = createClient({ noStore: true })
     let active = true
 
     const init = async () => {
       // A mesa é leitura pública (cardápio). A comanda é aberta/reusada SÓ via RPC
       // SECURITY DEFINER (o cliente não insere/lê comandas direto — RLS escopada).
-      const mesaRes = await supabase.from('mesas').select('*').eq('id', mesaId).maybeSingle()
+      // Retry: tolera a janela pós-criação / blip de rede antes de declarar falha.
+      const mesaRes = await lerMesaComRetry(supabase, mesaId)
 
       if (!active) return
 
+      // Erro de leitura (RLS/permissão/rede) é DIFERENTE de "mesa não existe".
+      // A leitura de `mesas` é pública por design (migration 008); se cair aqui,
+      // a leitura pública provavelmente quebrou em produção — logamos a causa real.
+      if (mesaRes.error) {
+        console.error('[mesa] falha ao ler mesa:', mesaRes.error)
+        setStatus('read-error')
+        return
+      }
+
       const mesaData = mesaRes.data
-      if (!mesaData || !mesaData.ativo) {
-        setStatus('no-mesa')
+      if (!mesaData) {
+        setStatus('not-found')
+        return
+      }
+      if (!mesaData.ativo) {
+        setStatus('inactive')
         return
       }
       setMesa(mesaData as Mesa)
@@ -73,14 +108,59 @@ export default function MesaPage() {
     )
   }
 
-  if (status === 'no-mesa') {
+  if (status === 'not-found') {
     return (
-      <div className="min-h-screen flex items-center justify-center px-6">
+      <div className="min-h-screen flex flex-col items-center justify-center px-6 gap-6">
         <EmptyState
           icon="🚫"
-          title="Mesa indisponível"
-          description="Esta mesa não existe ou está desativada. Procure um atendente."
+          title="Mesa não encontrada"
+          description="Este QR Code não corresponde a nenhuma mesa. Se acabou de ser criada, tente de novo; senão, procure um atendente."
         />
+        <button
+          onClick={reabrir}
+          className="rounded-xl text-sm font-bold px-6"
+          style={{ minHeight: 48, background: 'var(--accent)', color: '#FAF9F5', border: 'none' }}
+        >
+          Tentar novamente
+        </button>
+      </div>
+    )
+  }
+
+  if (status === 'inactive') {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center px-6 gap-6">
+        <EmptyState
+          icon="🚫"
+          title="Mesa desativada"
+          description="Esta mesa está desativada no momento. Procure um atendente."
+        />
+        <button
+          onClick={reabrir}
+          className="rounded-xl text-sm font-bold px-6"
+          style={{ minHeight: 48, background: 'var(--accent)', color: '#FAF9F5', border: 'none' }}
+        >
+          Tentar novamente
+        </button>
+      </div>
+    )
+  }
+
+  if (status === 'read-error') {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center px-6 gap-6">
+        <EmptyState
+          icon="⚠️"
+          title="Não foi possível carregar a mesa"
+          description="Tente novamente em instantes. Se continuar, mostre esta tela ao atendente."
+        />
+        <button
+          onClick={reabrir}
+          className="rounded-xl text-sm font-bold px-6"
+          style={{ minHeight: 48, background: 'var(--accent)', color: '#FAF9F5', border: 'none' }}
+        >
+          Tentar novamente
+        </button>
       </div>
     )
   }

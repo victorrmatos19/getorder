@@ -7,6 +7,7 @@ const ITEMS = [
   { href: '/admin',               label: 'Painel',    match: (p: string) => p === '/admin' },
   { href: '/admin/cardapio',      label: 'Cardápio',  match: (p: string) => p.startsWith('/admin/cardapio') },
   { href: '/admin/mesas',         label: 'Mesas',     match: (p: string) => p.startsWith('/admin/mesas') },
+  { href: '/admin/usuarios',      label: 'Equipe',    match: (p: string) => p.startsWith('/admin/usuarios') },
   { href: '/admin/configuracoes', label: 'Configs',   match: (p: string) => p.startsWith('/admin/configuracoes') },
 ]
 

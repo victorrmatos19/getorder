@@ -170,4 +170,16 @@ export type Perfil = {
   id: string
   role: Role
   restaurante_id: string | null
+  nome: string | null
+  ativo: boolean
+}
+
+// Linha da tela de equipe (/admin/usuarios). O e-mail vive em auth.users e é
+// resolvido pelo endpoint server-side (service_role) — não vem do client.
+export type UsuarioEquipe = {
+  id: string
+  nome: string | null
+  email: string
+  role: Role
+  ativo: boolean
 }
