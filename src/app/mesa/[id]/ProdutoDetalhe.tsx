@@ -5,7 +5,7 @@ import Image from 'next/image'
 import Spinner from '@/components/Spinner'
 import EmptyState from '@/components/EmptyState'
 import { fmt } from '@/lib/formatters'
-import { subtotalItem } from '@/lib/calcComanda'
+import { subtotalItem, precoEfetivo } from '@/lib/calcComanda'
 import type { CartLine } from '@/lib/calcComanda'
 import { useProdutoOpcoes } from '@/lib/hooks/useProdutoOpcoes'
 import type { GrupoAdicional, ItemPedido, Produto } from '@/types'
@@ -74,15 +74,15 @@ export default function ProdutoDetalhe({ produto, bloqueado, onClose, onAddToCar
     [grupos, sel],
   )
 
-  // Total ao vivo via helper (base = produto.preco, igual ao snapshot da RPC)
+  // Total ao vivo via helper (base = PREÇO EFETIVO, igual ao snapshot da RPC)
   const totalPreview = useMemo(
     () =>
       subtotalItem({
-        preco_base_snapshot: produto.preco,
+        preco_base_snapshot: precoEfetivo(produto),
         quantidade,
         adicionais: idsSelecionados.map((id) => ({ preco_snapshot: adicionalById.get(id)?.preco ?? 0 })),
       } as unknown as ItemPedido),
-    [produto.preco, quantidade, idsSelecionados, adicionalById],
+    [produto, quantidade, idsSelecionados, adicionalById],
   )
 
   const podeAdicionar = !bloqueado && !produto.esgotado && quantidade >= 1 && gruposPendentes.length === 0
@@ -130,8 +130,11 @@ export default function ProdutoDetalhe({ produto, bloqueado, onClose, onAddToCar
 
         <div className="flex items-baseline justify-between gap-3">
           <div className="serif text-2xl" style={{ color: 'var(--ink)', lineHeight: 1.1 }}>{produto.nome}</div>
-          <div className="mono-num text-base font-bold shrink-0" style={{ color: 'var(--price)' }}>
-            {fmt.currency(produto.preco)}
+          <div className="flex items-baseline gap-2 shrink-0">
+            {produto.em_oferta && produto.oferta_preco != null && produto.oferta_preco < produto.preco ? (
+              <span className="mono-num text-xs line-through" style={{ color: 'var(--muted)' }}>{fmt.currency(produto.preco)}</span>
+            ) : null}
+            <span className="mono-num text-base font-bold" style={{ color: 'var(--price)' }}>{fmt.currency(precoEfetivo(produto))}</span>
           </div>
         </div>
         {produto.descricao && (

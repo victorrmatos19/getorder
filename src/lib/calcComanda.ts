@@ -3,6 +3,15 @@ import type { ItemPedido, Produto } from '@/types'
 const cents = (n: number) => Math.round(n * 100) / 100
 
 /**
+ * Preço EFETIVO de um produto (display/carrinho) — MESMA regra que o servidor usa ao gravar o
+ * snapshot (`criar_item_pedido`): em oferta com `oferta_preco` definido → `oferta_preco`, senão `preco`.
+ * Garante "anunciado = cobrado" (cardápio, carrinho, preview e comanda batem com o snapshot da RPC).
+ */
+export function precoEfetivo(p: Pick<Produto, 'preco' | 'oferta_preco' | 'em_oferta'>): number {
+  return p.em_oferta && p.oferta_preco != null ? p.oferta_preco : p.preco
+}
+
+/**
  * Subtotal de um item a partir dos SNAPSHOTS (nunca de produto.preco no caso novo):
  *   (preco_base_snapshot + soma(adicionais.preco_snapshot)) * quantidade
  *
@@ -28,8 +37,8 @@ export function totalComanda(itens: ItemPedido[]): number {
 }
 
 // ── Carrinho do cliente (itens configurados, ainda não enviados) ──────
-// Mesma lógica de preço da comanda: base = produto.preco (igual ao snapshot
-// que a RPC grava), + soma dos adicionais escolhidos, × quantidade.
+// Base = PREÇO EFETIVO (respeita a oferta), igual ao snapshot que a RPC grava,
+// + soma dos adicionais escolhidos, × quantidade.
 
 export type CartLine = {
   key: string                 // uid local — permite o mesmo produto com configs diferentes
@@ -41,7 +50,7 @@ export type CartLine = {
 
 export function subtotalCartLine(line: CartLine): number {
   const adicionais = line.adicionais.reduce((s, a) => s + a.preco, 0)
-  return cents((line.produto.preco + adicionais) * line.quantidade)
+  return cents((precoEfetivo(line.produto) + adicionais) * line.quantidade)
 }
 
 export function totalCart(lines: CartLine[]): number {

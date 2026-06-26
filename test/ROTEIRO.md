@@ -173,6 +173,25 @@ Os valores em R$ dependem do seed (podem mudar). Asserte comportamento:
    - Toggle de **taxa** (se não obrigatória), **stepper de pessoas** (valor por pessoa), **formas de pagamento**.
    - **PIX é apenas seleção — NÃO há QR Code nem "Chave PIX".** Dinheiro → campo **"Valor recebido"** (com **máscara de moeda** em centavos) + troco automático.
 7. Selecionar uma forma e **Confirmar** → tela "Comanda encerrada / R$ X recebido via <forma>"; itens viram "Entregue"; a comanda **some da lista** do garçom.
+8. **Checkout transacional + preço de oferta (migration 020):**
+   - **[D] Total no servidor:** o `Confirmar` chama a RPC **`fechar_comanda`** (transacional); o
+     **total é recalculado no servidor** a partir dos snapshots — qualquer valor do front é ignorado.
+   - **[D] Produto em oferta:** marque um produto como oferta (Suite 10), peça-o, e confira que o
+     **item entra com o preço de oferta** (snapshot do **preço efetivo**) e que **carrinho/detalhe**
+     (Suites 3/4) mostram esse mesmo valor — **anunciado = cobrado**.
+   - **[D] Comanda vazia:** numa comanda sem itens, "Encerrar e cobrar" **não fecha** — erro claro
+     "Comanda sem itens. Use o cancelamento…" (oferecer cancelar — Suite 18).
+   - **[D] Double-close:** dois fechamentos concorrentes da mesma comanda → o segundo recebe
+     "Comanda já fechada" (lock `for update`).
+   - **[D] Inserir item em comanda já fechada/cancelada** falha ("Comanda não está aberta") — fecha a
+     janela de corrida.
+   - **[D] Teste rápido (psql) do snapshot de oferta:**
+     ```sql
+     -- produto em oferta → item entra com oferta_preco
+     update produtos set em_oferta=true, oferta_preco=1.00 where id='<produto>';
+     -- após pedir, em itens_pedido: preco_base_snapshot deve ser 1.00 (não o preço antigo)
+     select preco_base_snapshot from itens_pedido where produto_id='<produto>' order by criado_em desc limit 1;
+     ```
 
 **Esperado:** paridade de total cliente↔garçom; PIX sem QR; fechamento atualiza status e dashboard.
 
@@ -493,13 +512,17 @@ Em FAIL, anotar rota, passo, esperado × obtido e qualquer erro de console/rede.
 - **Upload de foto:** policies do bucket `produtos` (010) permitem leitura pública + escrita
   autenticada. → Suite 16 passo 4.
 
-**Migrations recentes (012–015) — o que cada teste protege:**
+**Migrations recentes (012–020) — o que cada teste protege:**
 - **012** `produtos.esgotado` + guarda `'Produto esgotado'` na RPC `criar_item_pedido`. → Suites 3/10.
 - **013** RPC `lancar_pedido_garcom` (SECURITY DEFINER, transacional; reaproveita `criar_item_pedido`;
   só admin/garçom; find-or-create da comanda da mesa). → Suite 17.
 - **014/015** status `cancelada` + auditoria; job pg_cron `expirar_comandas_vazias()` (>60min, sem
   itens) e RPC `cancelar_comanda_vazia`. **O `db:reset` cria a extensão `pg_cron` localmente** (no
   PRD, habilitar pg_cron no painel do Supabase antes do `db:push`). → Suites 9/18.
+- **020** preço de **oferta** no snapshot (`criar_item_pedido` grava o **preço efetivo** =
+  `em_oferta and oferta_preco is not null ? oferta_preco : preco`) + `fechar_comanda` endurecido
+  (lock `for update` p/ double-close, guard de comanda vazia, status guard no UPDATE, `fechado_por`).
+  → Suites 3/4/8.
 
 > ℹ️ **Inputs de dinheiro** (preço, oferta, adicional, "valor recebido") usam **máscara de moeda em
 > centavos** (`fmt.moneyMask`/`moneyParse`). A **taxa de serviço** é percentual, não usa essa máscara.

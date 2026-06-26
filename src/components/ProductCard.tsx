@@ -2,6 +2,7 @@
 
 import Image from 'next/image'
 import { fmt } from '@/lib/formatters'
+import { precoEfetivo } from '@/lib/calcComanda'
 import type { Produto } from '@/types'
 
 type Props = {
@@ -74,7 +75,7 @@ export default function ProductCard({ produto, onOpen, isLast }: Props) {
               className={`mono-num text-base font-bold${isEsgotado ? ' line-through' : ''}`}
               style={{ color: isEsgotado ? 'var(--muted)' : 'var(--price)' }}
             >
-              {fmt.currency(isOferta ? produto.oferta_preco! : produto.preco)}
+              {fmt.currency(precoEfetivo(produto))}
             </span>
           </div>
         </div>

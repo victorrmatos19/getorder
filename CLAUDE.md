@@ -308,8 +308,9 @@ nulo** (cliente anônimo): `if new.status = 'novo' and auth.uid() is null then c
 Logo o cliente fica gated por pausa/fora de horário; **o staff autenticado (garçom) NÃO** — pode
 lançar pedido manual mesmo com pedidos pausados (balcão/telefone). Wrapper tipado em `lib/itensPedido.ts`.
 
-> ⚠️ Limitação conhecida: a RPC faz snapshot de `produtos.preco`, **ignorando** `em_oferta`/
-> `oferta_preco`. Ofertas hoje são só display no card; não incidem no pedido.
+> ✅ **Preço de oferta no pedido (migration 020):** o snapshot em `criar_item_pedido` usa o **preço
+> efetivo** (`em_oferta and oferta_preco is not null ? oferta_preco : preco`) — anunciado = cobrado.
+> Front: helper `precoEfetivo` (`lib/calcComanda`) no card/detalhe/carrinho.
 
 ### RPC `lancar_pedido_garcom` (lançamento manual pelo garçom — migration 013)
 
@@ -746,6 +747,9 @@ npm run db:status    # mostra URLs e chaves locais
   - `014_comanda_status_cancelada.sql` — valor `'cancelada'` no enum `comanda_status` (separada: enum só usável após commit).
   - `015_prevencao_comanda_zumbi.sql` — auditoria + job pg_cron `expirar_comandas_vazias()` + RPC `cancelar_comanda_vazia`.
   - `019_perfis_nome_ativo.sql` — colunas `perfis.nome` + `perfis.ativo` (gestão de equipe pelo admin; soft-delete).
+  - `020_preco_efetivo_e_checkout_hardening.sql` — `criar_item_pedido` snapshota o **preço efetivo**
+    (respeita oferta); `fechar_comanda` endurecido: lock `for update` (double-close), guard de comanda
+    vazia, status guard no UPDATE, coluna `comandas.fechado_por`.
 - `supabase/seed.sql` = dump dos **dados do PRD** (public + auth). **Gitignored** (dados reais +
   hashes). Para recriá-lo: `npx supabase db dump --linked --data-only -f supabase/seed.sql`.
 
@@ -903,7 +907,7 @@ Itens legados (sem `preco_base_snapshot`) caem no fallback `produto.preco`.
 - [ ] Testes E2E (Playwright)
 
 ### Operacional
-- [ ] Ofertas valendo no pedido (RPC honrar em_oferta/oferta_preco no snapshot)
+- [x] ~~Ofertas valendo no pedido~~ — feito (migration 020: snapshot do **preço efetivo** + helper `precoEfetivo` no front)
 - [x] ~~Estoque básico (produto "esgotado hoje")~~ — feito (migration 012)
 - [ ] Toggle de favorito/"Mais pedidos" na tela do garçom (deixado fora do v1 do lançamento manual)
 - [ ] Comanda-zumbi Caso 2: comanda COM itens abandonada (lembrete/selo de ociosidade; perda/dine-and-dash);
