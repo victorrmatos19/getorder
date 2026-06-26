@@ -289,8 +289,19 @@ com o banco; gráficos renderizam; export gera arquivo coerente.
 
 ---
 
-## Suite 15 — LGPD / privacidade (`/privacidade`) · [A]
-1. Abrir `/privacidade` (público) → página de política carrega.
+## Suite 15 — LGPD / privacidade + suporte (`/privacidade`, `/suporte`) · [A]
+1. Abrir `/privacidade` **deslogado** (público, sem redirect p/ `/login`) → política carrega.
+   - **Asserção-chave (conteúdo atual):** o texto reflete o modelo **sem identificação do cliente**
+     (comanda abre na mesa, **sem nome/CPF/cadastro**) e descreve a coleta real: **e-mail de login da
+     equipe** + **fotos** (cardápio/marca); **não** menciona mais coletar nome/CPF do cliente.
+   - Papéis LGPD (restaurante = controlador, GetOrder/Optmore = operador); contato com **WhatsApp**
+     (`wa.me/5511917320202`) e **e-mail** (`mailto:`) clicáveis.
+2. Abrir `/suporte` **deslogado** (público, sem redirect p/ `/login` — é a **Support URL** da App Store)
+   → carrega no padrão visual da marca (mobile-first).
+   - **Asserção-chave:** WhatsApp **clicável** (`https://wa.me/5511917320202`, exibe "(11) 91732-0202")
+     e e-mail **clicável** (`mailto:`); deixa claro que **cliente pede pelo site (QR)**, não pelo app,
+     e que as contas são criadas pelo restaurante.
+   - **[middleware]** `/suporte` está no matcher público (junto de `/mesa`/`/privacidade`) → abre sem auth.
 
 ---
 
@@ -455,7 +466,8 @@ mesmos fluxos das suites de staff. O **cliente (`/mesa`)** e o **super-admin** c
 |---|---|---|
 | `/` | público | redireciona → `/login` |
 | `/login` | público | login da equipe |
-| `/privacidade` | público | política LGPD |
+| `/privacidade` | público | política LGPD (sem identificação do cliente; e-mail equipe + fotos) |
+| `/suporte` | público | página de suporte (Support URL da App Store) |
 | `/mesa/[id]` | público (cliente) | abertura na mesa + cardápio + pedido + Minha Comanda |
 | `/cozinha` | admin, cozinha | painel de pedidos (status) |
 | `/garcom` | admin, garçom | lista de mesas/comandas abertas |

@@ -6,11 +6,11 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  // Roda em tudo, EXCETO estáticos e as rotas públicas do cliente (/mesa, /privacidade) —
+  // Roda em tudo, EXCETO estáticos e as rotas públicas (/mesa, /privacidade, /suporte) —
   // mantém a proteção server-side das rotas protegidas e tira o custo do middleware/
   // auth.getUser() do caminho crítico do cliente. (Negative-lookahead: o param matcher
   // `/admin/:path*` não estava interceptando as rotas.)
   matcher: [
-    '/((?!_next/static|_next/image|favicon.ico|mesa/|privacidade|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+    '/((?!_next/static|_next/image|favicon.ico|mesa/|privacidade|suporte|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
   ],
 }
