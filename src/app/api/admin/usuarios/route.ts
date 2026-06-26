@@ -29,8 +29,8 @@ async function resolveEmails(admin: AdminClient, ids: string[]): Promise<Record<
 }
 
 // GET — lista a equipe do restaurante do admin (inclui admins, read-only no front).
-export async function GET() {
-  const auth = await requireAdmin()
+export async function GET(req: Request) {
+  const auth = await requireAdmin(req)
   if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status })
 
   let admin: AdminClient
@@ -79,7 +79,7 @@ type PostBody = {
 
 // POST — cria garçom/cozinha no Auth + perfil atrelado ao restaurante do admin.
 export async function POST(req: Request) {
-  const auth = await requireAdmin()
+  const auth = await requireAdmin(req)
   if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status })
 
   const body = (await req.json().catch(() => ({}))) as PostBody

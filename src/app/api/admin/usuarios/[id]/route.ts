@@ -24,7 +24,7 @@ type PatchBody = {
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
 
-  const auth = await requireAdmin()
+  const auth = await requireAdmin(req)
   if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status })
 
   // Guard extra: admin não age sobre o próprio registro (admin é read-only no v1).
