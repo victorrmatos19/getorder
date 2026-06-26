@@ -75,8 +75,12 @@ Os valores em R$ dependem do seed (podem mudar). Asserte comportamento:
 **Objetivo:** abertura direta na mesa (sem identificação) e cardápio.
 1. Abrir `/mesa/<id de mesa ativa>` (viewport mobile).
 2. Conferir: **sem tela de nome/CPF**; cai direto no cardápio. Header mostra o nome da mesa + logo GetOrder + "Sair".
-3. Abas **Cardápio / Minha Comanda**; pílulas de categoria (e seções 🆕 Novidades / 🔥 Em Oferta se houver).
-4. Trocar de categoria (clicar "Lanches", "Drinks"…) → lista muda.
+3. Abas **Cardápio / Minha Comanda**. O cardápio agora é **rolagem vertical contínua com scroll-spy
+   (modelo iFood)**: uma **nav de categorias** no topo (pular para a seção) + **destaque automático**
+   da categoria ativa conforme rola (e seções 🆕 Novidades / 🔥 Em Oferta se houver). *(commit `cb8f3b1`.)*
+4. Tocar numa categoria da nav (ex.: "Lanches", "Drinks") → **rola até a seção** (não troca a lista); ao
+   rolar manualmente, a categoria ativa na nav **acompanha** (scroll-spy). Todas as categorias coexistem
+   na mesma rolagem.
 5. Abrir `/mesa/<uuid-invalido>` → **"Mesa indisponível"**.
 6. (Compartilhada) Abrir a MESMA `/mesa/<id>` em 2 abas → ambas na mesma comanda (mesmos itens em "Minha Comanda").
 
@@ -364,6 +368,69 @@ de race via `not exists (itens)`.
 
 ---
 
+## Suite 19 — Admin: Marca / white-label (`/admin/configuracoes` → aba Marca) · [A]/[D]
+**Objetivo:** personalização visual por restaurante (cores + logo) refletindo no cliente e no staff.
+(commits `122170f` / `070d483` / `cb733ee` / `3bf37ca`.)
+1. Como **admin**, em `/admin/configuracoes`, abrir a aba **Marca**.
+2. **Cores:** editar **Cor primária**, **Cor de destaque (CTAs)** e **Cor dos preços** por hex `#RRGGBB`
+   (input de cor + campo hex). A **pré-visualização ao vivo** (card do cliente claro + cozinha escuro)
+   repinta conforme edita. Botão **"Usar cores padrão GetOrder"** zera as 3 (volta ao padrão).
+3. **Logo:** **enviar logo** (PNG/JPG/WebP ≤ 1MB) → preview; **"Remover logo"** volta ao fallback.
+   **[D] Esperado:** upload em `storage/logos/<restaurante_id>/...` → 200; `restaurantes.logo_url` gravado.
+4. **Salvar marca**. **[D]** persiste em `restaurantes` (`cor_primaria/cor_accent/cor_preco/logo_url`;
+   vazio = `null` = padrão). Validação hex `^#[0-9a-fA-F]{6}$` no client (espelha o CHECK do banco).
+5. **Reflexo no `/mesa`** (cliente): logo **circular maior** no header + cobranding "via GetOrder"; os
+   **preços** usam o token **`--price`**; os **botões/CTAs** usam a cor **accent** (com contraste WCAG
+   garantido por `deriveTheme`). Cores nulas → padrão GetOrder (sem regressão).
+
+**Esperado:** marca persiste por tenant; `deriveTheme` (fonte única, web e app nativo) aplica os tokens
+com contraste AA; nenhuma cor "ilegível"; padrão restaurável.
+
+---
+
+## Suite 20 — Admin: Equipe / gestão de usuários (`/admin/usuarios`) · [A]/[D]
+**Objetivo:** o admin gerencia a **própria equipe** (garçom/cozinha) por endpoints server-side
+(`service_role`); isolamento e privilégio garantidos no servidor. (migration 019; commits `99bf41d`/`3b8c111`.)
+1. Como **admin**, abrir **`/admin/usuarios`** (link/menu do admin). Lista a equipe do restaurante
+   (nome, e-mail, função, **Ativo/Inativo**); o próprio admin marcado como **"Você"** (read-only).
+2. **Criar** usuário (`+ Novo`): nome, e-mail, **senha ≥ 8**, função **garçom** ou **cozinha** (só essas).
+   **[D] Esperado:** cria no **Auth** (`email_confirm:true`) + `perfis` (`nome`, `role`,
+   `restaurante_id` do admin, `ativo:true`); se o insert do perfil falha, **rollback** do Auth (sem órfão).
+3. **Editar nome** / **Trocar função** (garçom↔cozinha) / **Resetar senha** (≥8) de um garçom/cozinha.
+4. **Desativar** → `perfis.ativo=false` + **ban no Auth**; **Reativar** → `ativo=true` + unban.
+   **[D]** o **middleware** barra `ativo=false` (`/login?inactive=1`) mesmo com access token válido.
+5. **Guards (negativos):** o admin **não** cria/edita **admin** nem **super_admin**, **não** age sobre
+   **si mesmo** (403 "Você não pode alterar o próprio usuário aqui."), e **não** toca usuário de **outro
+   tenant** (403). `restaurante_id`/`role` saem **do perfil do caller** no servidor (`requireAdmin`),
+   nunca do request.
+6. **Sem `SUPABASE_SERVICE_ROLE_KEY`** no ambiente → endpoints retornam **500** com mensagem clara.
+
+> 📱 **App nativo:** a mesma tela existe no app de staff e consome **os mesmos endpoints**
+> `/api/admin/usuarios`, autenticando por **`Authorization: Bearer <access_token>`** (o `requireAdmin`
+> aceita Bearer **e** cookie — commit `3b8c111`). Em produção, exige o web deployado com essa mudança.
+
+**Esperado:** admin gerencia só garçom/cozinha do próprio tenant; escrita 100% via service_role no
+servidor; desativado não loga (defense in depth no middleware).
+
+---
+
+## Suite 21 — App nativo de staff (Maestro) · [E2E]
+**Objetivo:** o staff (admin/garçom/cozinha) também roda num **app nativo** (`getorderapp`, Expo/React
+Native). Sua regressão é **automatizada via Maestro** (testes de tela no simulador iOS), cobrindo os
+mesmos fluxos das suites de staff. O **cliente (`/mesa`)** e o **super-admin** continuam **web-only**
+(QA de navegador acima).
+- **Onde:** `getorderapp/maestro/` — flows YAML + `run.sh` (harness) + `README.md` (mapa flow→suite e
+  limitações). Roda sobre um **dev build** (`com.optmore.getorder.staff`) contra o **Supabase local**.
+- **Cobertura (equivalente nativo):** login/roles (S1) · cozinha kanban (S7) · garçom lista+checkout (S8)
+  · garçom lança pedido (S17) · dashboard v2 (S9) · cardápio (S10) · mesas+QR (S12) · configurações:
+  geral + **horário/time-picker** + **marca** (S13/S19) · equipe (S20, *gated*: precisa do web local).
+- **Não automatizável no Maestro** (verificar manual/ROTEIRO): áudio do alerta da cozinha, realtime/push,
+  share-sheet do CSV, conteúdo renderizado do QR.
+
+**Como rodar:** `cd getorderapp && bash maestro/run.sh` (ver `getorderapp/maestro/README.md`).
+
+---
+
 ## Anexo A — Mapa de rotas
 | Rota | Acesso | Função |
 |---|---|---|
@@ -380,7 +447,8 @@ de race via `not exists (itens)`.
 | `/admin/cardapio` | admin | produtos + categorias |
 | `/admin/cardapio/adicionais` | admin | grupos de adicionais |
 | `/admin/mesas` | admin | mesas + QR |
-| `/admin/configuracoes` | admin | taxa, horário, pausa |
+| `/admin/configuracoes` | admin | taxa, horário, pausa, **marca/white-label** |
+| `/admin/usuarios` | admin | gestão da equipe (garçom/cozinha) via endpoints `service_role` |
 | `/super-admin` | super_admin | lista de restaurantes |
 | `/super-admin/restaurantes/novo` | super_admin | criar restaurante + admin |
 | `/super-admin/restaurantes/[id]` | super_admin | editar/usuários/ativar |

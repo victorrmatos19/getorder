@@ -960,6 +960,9 @@ Itens legados (sem `preco_base_snapshot`) caem no fallback `produto.preco`.
 - ❌ Não criar/alterar usuários (`perfis` + Auth) a partir do client — só pelos endpoints
   `/api/admin/usuarios` (service_role). O `restaurante_id` e o `role` saem do perfil do caller no
   servidor (`requireAdmin`), nunca do request; o admin só cria/edita `garcom`/`cozinha` do próprio tenant.
+- ❌ **Entregar feature/bug sem atualizar o teste** — toda mudança de fluxo atualiza `test/ROTEIRO.md`
+  (QA de navegador, web) e, se afetar o staff, o **flow Maestro** correspondente no app nativo
+  (`getorderapp/maestro/flows`). Requisito de regressão do Victor.
 
 ---
 
