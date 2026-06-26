@@ -206,6 +206,10 @@ Os valores em R$ dependem do seed (podem mudar). Asserte comportamento:
    período **recalcula todos os blocos**.
 3. **Resumo** (4 cards): Faturamento, Ticket médio, Comandas, Pessoas — cada um com **Δ% vs período
    anterior** (▲ verde / ▼ vermelho; "—" quando não há base).
+   - **Período sem vendas:** quando o período **não tem comandas fechadas** (`comandas.atual === 0`),
+     o Resumo mostra **"Sem vendas no período"** (rótulo neutro/muted) no lugar do **"−100% vs
+     anterior"** — evita o vermelho alarmante numa semana fraca. (Ex.: selecionar "7 dias" num tenant
+     que só vendeu há >7 dias.) Mesmo comportamento no app nativo (paridade).
 4. **Tendência de faturamento** (Recharts area, lazy via `next/dynamic`): por **dia** (ou por **hora**
    no período "Hoje").
 5. **Desempenho de produtos**: ranking com toggle **Receita/Volume**, barras, seção **"menos
