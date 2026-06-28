@@ -12,7 +12,7 @@ import { totalComanda } from '@/lib/calcComanda'
 import type { Comanda, ItemPedido, Mesa } from '@/types'
 
 type ItemWithPreco = ItemPedido & { produto?: { preco: number } }
-type Row = Comanda & { mesa: Mesa; itens: ItemWithPreco[] }
+type Row = Comanda & { mesa: Mesa; itens: ItemWithPreco[]; conta_solicitada_em: string | null }
 
 function useGarcomData() {
   const supabase = createClient()
@@ -21,7 +21,7 @@ function useGarcomData() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('comandas')
-        .select('id, mesa_id, cliente_nome, criado_em, mesa:mesas(id, nome), itens:itens_pedido(id, status, quantidade, preco_base_snapshot, produto:produtos(preco), adicionais:itens_pedido_adicionais(preco_snapshot))')
+        .select('id, mesa_id, cliente_nome, criado_em, conta_solicitada_em, mesa:mesas(id, nome), itens:itens_pedido(id, status, quantidade, preco_base_snapshot, produto:produtos(preco), adicionais:itens_pedido_adicionais(preco_snapshot))')
         .eq('status', 'aberta')
         .order('criado_em')
       if (error) throw error
@@ -106,6 +106,7 @@ export default function GarcomList() {
               .flatMap((c) => c.itens)
               .filter((i) => i.status === 'pronto').length
             const temPronto = prontos > 0
+            const contaPedida = comandas.some((c) => c.conta_solicitada_em)
 
             // Card VERDE chamativo (texto branco) quando há item pronto para entregar;
             // caso contrário, mantém o visual neutro creme atual.
@@ -132,6 +133,14 @@ export default function GarcomList() {
                 >
                   <div className="serif text-lg" style={{ color: corTexto }}>{mesa.nome}</div>
                   <div className="flex items-center gap-2">
+                    {contaPedida && (
+                      <span
+                        className="text-xs font-bold px-2 py-0.5 rounded-full"
+                        style={{ background: 'var(--accent)', color: 'var(--on-accent)' }}
+                      >
+                        Conta pedida
+                      </span>
+                    )}
                     {temPronto && (
                       <span
                         className="text-xs font-bold px-2 py-0.5 rounded-full"

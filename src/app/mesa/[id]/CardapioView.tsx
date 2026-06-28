@@ -14,7 +14,7 @@ import { fmt } from '@/lib/formatters'
 import { subtotalItem, totalComanda, subtotalCartLine, totalCart } from '@/lib/calcComanda'
 import type { CartLine } from '@/lib/calcComanda'
 import { criarItemPedido } from '@/lib/itensPedido'
-import { cancelarItemCliente } from '@/lib/comandaCliente'
+import { cancelarItemCliente, solicitarConta as solicitarContaRpc } from '@/lib/comandaCliente'
 import { useProdutos } from '@/lib/hooks/useProdutos'
 import { useCategorias } from '@/lib/hooks/useCategorias'
 import { useComandaCliente } from '@/lib/hooks/useComandaCliente'
@@ -221,8 +221,14 @@ export default function CardapioView({ mesa, comandaId, onReset }: Props) {
     }
   }
 
-  const solicitarConta = () => {
-    setToast({ visible: true, message: 'Garçom avisado! 🙌' })
+  const solicitarConta = async () => {
+    try {
+      await solicitarContaRpc(comandaId)
+      setToast({ visible: true, message: 'Garçom avisado! 🙌' })
+      qc.invalidateQueries({ queryKey: ['comanda-cliente', comandaId] })
+    } catch (e: any) {
+      setToast({ visible: true, message: e.message || 'Erro ao solicitar a conta.' })
+    }
   }
 
   return (
@@ -412,6 +418,7 @@ export default function CardapioView({ mesa, comandaId, onReset }: Props) {
           onRefetch={() => comandaQ.refetch()}
           onCancelarItem={cancelarItem}
           onSolicitarConta={solicitarConta}
+          contaSolicitada={!!comandaQ.data?.conta_solicitada_em}
         />
       )}
 
@@ -539,7 +546,7 @@ export default function CardapioView({ mesa, comandaId, onReset }: Props) {
 }
 
 function MinhaComanda({
-  itens, loading, error, taxaPercentual, onRefetch, onCancelarItem, onSolicitarConta,
+  itens, loading, error, taxaPercentual, onRefetch, onCancelarItem, onSolicitarConta, contaSolicitada,
 }: {
   itens: ItemPedido[]
   loading: boolean
@@ -548,6 +555,7 @@ function MinhaComanda({
   onRefetch: () => void
   onCancelarItem: (id: string) => void
   onSolicitarConta: () => void
+  contaSolicitada: boolean
 }) {
   const [confirmingId, setConfirmingId] = useState<string | null>(null)
   const rounds = useMemo(() => groupRounds(itens), [itens])
@@ -738,17 +746,17 @@ function MinhaComanda({
         </div>
         <button
           onClick={onSolicitarConta}
-          disabled={itens.length === 0}
+          disabled={itens.length === 0 || contaSolicitada}
           className="w-full rounded-xl text-sm font-bold"
           style={{
             minHeight: 52,
-            background: itens.length === 0 ? 'var(--line)' : 'var(--accent)',
-            color: itens.length === 0 ? 'var(--muted)' : 'var(--on-accent)',
-            border: 'none',
-            cursor: itens.length === 0 ? 'not-allowed' : 'pointer',
+            background: itens.length === 0 ? 'var(--line)' : contaSolicitada ? 'var(--surface)' : 'var(--accent)',
+            color: itens.length === 0 ? 'var(--muted)' : contaSolicitada ? 'var(--accent)' : 'var(--on-accent)',
+            border: contaSolicitada ? '1px solid var(--accent)' : 'none',
+            cursor: itens.length === 0 || contaSolicitada ? 'default' : 'pointer',
           }}
         >
-          Solicitar conta
+          {contaSolicitada ? 'Conta solicitada ✓' : 'Solicitar conta'}
         </button>
       </div>
     </>

@@ -123,9 +123,14 @@ Os valores em R$ dependem do seed (podem mudar). Asserte comportamento:
 2. Itens recém-enviados aparecem como **"Aguardando Preparo"**.
 3. Rodapé: **Subtotal**, **Taxa de serviço (X%)**, **Total** (= Subtotal + Taxa). Anotar o Total (usar na Suite 8).
 4. **Cancelar** um item com status 'novo' (✕ → confirmar) → vira "Cancelado" e sai do total. Item já "Preparando" **não** cancela ("Já estava em preparo").
-5. "Solicitar conta" → toast. "Sair" → tela "Você saiu da comanda"; "Voltar ao cardápio" reabre a mesma comanda.
+5. **"Solicitar conta"** → grava o sinal via RPC `solicitar_conta` (não é mais só toast): toast
+   "Garçom avisado! 🙌" e o botão vira **"Conta solicitada ✓"** (desabilitado). **[D]**
+   `comandas.conta_solicitada_em` é setado (guard: só comanda `aberta`; mantém o 1º horário).
+   O botão reseta sozinho (polling 5s) quando o garçom atende (limpa o sinal). → ver Suite 8.
+6. "Sair" → tela "Você saiu da comanda"; "Voltar ao cardápio" reabre a mesma comanda.
 
-**Esperado:** total com taxa correto; guard de cancelamento; status reflete a cozinha (realtime).
+**Esperado:** total com taxa correto; guard de cancelamento; status reflete a cozinha (realtime);
+"pedir a conta" sinaliza o garçom em tempo real.
 
 ---
 
@@ -166,7 +171,13 @@ Os valores em R$ dependem do seed (podem mudar). Asserte comportamento:
 1. Logar como **garçom** (ou admin). Lista de mesas com comandas abertas; cada comanda mostra **total** e contagem de itens. Header tem o botão **"Nova comanda"** (→ lançamento manual, Suite 17).
 2. **Asserção-chave:** o total da comanda na lista **inclui adicionais** e **bate** com o Subtotal da "Minha Comanda" do cliente (mesma comanda).
 3. **Card INTEIRO VERDE (texto branco)** quando a mesa tem item **'pronto'** para entregar (chamativo), com badge "N prontos"; visual **neutro creme** quando não há nada pronto.
+   - **Conta pedida (realtime):** quando o cliente toca "Solicitar conta" (Suite 5), a mesa ganha um
+     **badge terracota "Conta pedida"** em **segundos** (sem reload — a lista já assina `comandas` por
+     realtime). É o aceite do bug "pedir a conta não chega pro garçom".
 4. Abrir a comanda (`/garcom/comanda/[id]`): histórico por **rodada** com adicionais e subtotal por item; status reflete a cozinha (realtime). Rodapé tem **"Novo pedido"** (→ Suite 17).
+   - **[D] Atender = limpar o sinal:** ao **abrir a comanda**, o garçom "atende" — chama
+     `marcar_conta_atendida` (limpa `conta_solicitada_em`) → o badge **"Conta pedida"** **some da lista**
+     (realtime) e `comandas.conta_solicitada_em` volta a **NULL**. Fechar a comanda também tira (sai da lista).
 5. "Entregar" item/todos (quando há prontos); "Cancelar" item 'novo'.
 6. **"Encerrar e Cobrar"**: modal mostra **Total = Subtotal + Taxa** e o resumo com adicionais.
    - **Asserção-chave:** esse Total **é igual** ao Total da "Minha Comanda" do cliente (Suite 5, taxa aplicada, 1 pessoa).
@@ -528,7 +539,7 @@ Em FAIL, anotar rota, passo, esperado × obtido e qualquer erro de console/rede.
 - **Upload de foto:** policies do bucket `produtos` (010) permitem leitura pública + escrita
   autenticada. → Suite 16 passo 4.
 
-**Migrations recentes (012–020) — o que cada teste protege:**
+**Migrations recentes (012–021) — o que cada teste protege:**
 - **012** `produtos.esgotado` + guarda `'Produto esgotado'` na RPC `criar_item_pedido`. → Suites 3/10.
 - **013** RPC `lancar_pedido_garcom` (SECURITY DEFINER, transacional; reaproveita `criar_item_pedido`;
   só admin/garçom; find-or-create da comanda da mesa). → Suite 17.
@@ -539,6 +550,9 @@ Em FAIL, anotar rota, passo, esperado × obtido e qualquer erro de console/rede.
   `em_oferta and oferta_preco is not null ? oferta_preco : preco`) + `fechar_comanda` endurecido
   (lock `for update` p/ double-close, guard de comanda vazia, status guard no UPDATE, `fechado_por`).
   → Suites 3/4/8.
+- **021** "pedir a conta": coluna `comandas.conta_solicitada_em` + RPC `solicitar_conta` (cliente anon,
+  guard `status='aberta'`) + `marcar_conta_atendida` (garçom limpa, tenant-guard); `get_comanda_cliente`
+  passa a retornar o campo. Badge "Conta pedida" no garçom via realtime. → Suites 5/8.
 
 > ℹ️ **Inputs de dinheiro** (preço, oferta, adicional, "valor recebido") usam **máscara de moeda em
 > centavos** (`fmt.moneyMask`/`moneyParse`). A **taxa de serviço** é percentual, não usa essa máscara.

@@ -13,6 +13,7 @@ export type ComandaCliente = {
   id: string
   status: string
   cliente_nome: string | null
+  conta_solicitada_em: string | null
   itens: ItemPedido[]
 }
 
@@ -39,6 +40,14 @@ export async function cancelarItemCliente(comandaId: string, itemId: string): Pr
     p_comanda_id: comandaId,
     p_item_id: itemId,
   })
+  if (error) throw error
+  return data as boolean
+}
+
+/** sinaliza "quero a conta" na própria comanda aberta (guard de status no servidor). */
+export async function solicitarConta(comandaId: string): Promise<boolean> {
+  const supabase = createClient()
+  const { data, error } = await supabase.rpc('solicitar_conta', { p_comanda_id: comandaId })
   if (error) throw error
   return data as boolean
 }

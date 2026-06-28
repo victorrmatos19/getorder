@@ -15,6 +15,7 @@ import { subtotalItem, totalComanda } from '@/lib/calcComanda'
 import { useComanda } from '@/lib/hooks/useComanda'
 import { useItensComanda } from '@/lib/hooks/useItens'
 import { cancelarComandaVazia } from '@/lib/cancelarComandaVazia'
+import { marcarContaAtendida } from '@/lib/marcarContaAtendida'
 import type { ItemPedido } from '@/types'
 
 export default function ComandaDetalhe({ comandaId }: { comandaId: string }) {
@@ -31,6 +32,12 @@ export default function ComandaDetalhe({ comandaId }: { comandaId: string }) {
       router.replace(`/garcom/comanda/${comandaId}`)
     }
   }, [searchParams, comandaId, router])
+
+  // Garçom abriu a comanda → atende a solicitação de conta (limpa o sinal "Conta pedida", se houver).
+  useEffect(() => {
+    marcarContaAtendida(comandaId).catch(() => {})
+  }, [comandaId])
+
   const [entregando, setEntregando] = useState(false)
   const [entregandoId, setEntregandoId] = useState<string | null>(null)
   const [confirmingCancelId, setConfirmingCancelId] = useState<string | null>(null)
