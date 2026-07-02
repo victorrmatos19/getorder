@@ -750,6 +750,12 @@ npm run db:status    # mostra URLs e chaves locais
   - `020_preco_efetivo_e_checkout_hardening.sql` — `criar_item_pedido` snapshota o **preço efetivo**
     (respeita oferta); `fechar_comanda` endurecido: lock `for update` (double-close), guard de comanda
     vazia, status guard no UPDATE, coluna `comandas.fechado_por`.
+  - `021_conta_solicitada.sql` — "pedir a conta": coluna `comandas.conta_solicitada_em` + RPCs
+    `solicitar_conta` (cliente anon) e `marcar_conta_atendida` (garçom limpa ao abrir a comanda);
+    `get_comanda_cliente` retorna o campo. Badge "Conta pedida" no garçom (web e app) via realtime.
+  - `022_input_bounds_server.sql` — bounds de input no servidor (auditoria): `fechar_comanda` valida
+    `numero_pessoas` 1–20; CHECKs `NOT VALID` de defesa (`quantidade` 1–99, `obs` ≤200, `pessoas` 1–20).
+    (`criar_item_pedido` já validava qtd/obs desde a 016.)
 - `supabase/seed.sql` = dump dos **dados do PRD** (public + auth). **Gitignored** (dados reais +
   hashes). Para recriá-lo: `npx supabase db dump --linked --data-only -f supabase/seed.sql`.
 

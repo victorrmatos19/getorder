@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { useEffect, useMemo } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { createClient } from '@/lib/supabase/client'
+import { useRestaurante } from '@/lib/contexts/RestauranteContext'
 import StaffHeader from '@/components/StaffHeader'
 import EmptyState from '@/components/EmptyState'
 import Spinner from '@/components/Spinner'
@@ -32,23 +33,37 @@ function useGarcomData() {
 
 export default function GarcomList() {
   const qc = useQueryClient()
+  const { restauranteId } = useRestaurante()
   const { data: rows = [], isLoading, isError, error, refetch } = useGarcomData()
 
   useEffect(() => {
+    if (!restauranteId) return
+    // Canais filtrados por tenant (auditoria item 1, paridade com o app nativo):
+    // evento de outro restaurante não chega nem dispara refetch.
+    const soDoTenant = (payload: { new?: unknown; old?: unknown }) => {
+      const rid =
+        (payload.new as { restaurante_id?: string })?.restaurante_id ??
+        (payload.old as { restaurante_id?: string })?.restaurante_id
+      return !rid || rid === restauranteId
+    }
     const supabase = createClient()
     const ch = supabase
       .channel('garcom-list')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'comandas' }, () => {
-        qc.invalidateQueries({ queryKey: ['garcom-mesas'] })
-      })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'itens_pedido' }, () => {
-        qc.invalidateQueries({ queryKey: ['garcom-mesas'] })
-      })
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'comandas', filter: `restaurante_id=eq.${restauranteId}` },
+        (p) => { if (soDoTenant(p)) qc.invalidateQueries({ queryKey: ['garcom-mesas'] }) },
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'itens_pedido', filter: `restaurante_id=eq.${restauranteId}` },
+        (p) => { if (soDoTenant(p)) qc.invalidateQueries({ queryKey: ['garcom-mesas'] }) },
+      )
       .subscribe()
     return () => {
       supabase.removeChannel(ch)
     }
-  }, [qc])
+  }, [qc, restauranteId])
 
   const byMesa = useMemo(() => {
     const m = new Map<string, { mesa: Mesa; comandas: Row[] }>()

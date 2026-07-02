@@ -466,7 +466,7 @@ mesmos fluxos das suites de staff. O **cliente (`/mesa`)** e o **super-admin** c
 (QA de navegador acima).
 - **Onde:** `getorderapp/maestro/` — flows YAML + `run.sh` (harness) + `README.md` (mapa flow→suite e
   limitações). Roda sobre um **dev build** (`com.optmore.getorder.staff`) contra o **Supabase local**.
-- **Cobertura (equivalente nativo):** login/roles (S1) · cozinha kanban (S7) · garçom lista+checkout (S8)
+- **Cobertura (equivalente nativo):** login/roles (S1) · **guard fino de role via deep link** (auditoria) · cozinha kanban (S7) · garçom lista+checkout (S8)
   · garçom lança pedido (S17) · dashboard v2 (S9) · cardápio (S10) · mesas+QR (S12) · configurações:
   geral + **horário/time-picker** + **marca** (S13/S19) · equipe (S20, *gated*: precisa do web local).
 - **Não automatizável no Maestro** (verificar manual/ROTEIRO): áudio do alerta da cozinha, realtime/push,
@@ -553,6 +553,15 @@ Em FAIL, anotar rota, passo, esperado × obtido e qualquer erro de console/rede.
 - **021** "pedir a conta": coluna `comandas.conta_solicitada_em` + RPC `solicitar_conta` (cliente anon,
   guard `status='aberta'`) + `marcar_conta_atendida` (garçom limpa, tenant-guard); `get_comanda_cliente`
   passa a retornar o campo. Badge "Conta pedida" no garçom via realtime. → Suites 5/8.
+- **022** bounds de input no **servidor** (auditoria seg/perf): `fechar_comanda` recusa
+  `numero_pessoas` fora de 1–20 ("Número de pessoas inválido (1–20)"); CHECKs `NOT VALID` de defesa
+  em `itens_pedido.quantidade` (1–99), `itens_pedido.obs` (≤200) e `comandas.numero_pessoas` (1–20).
+  `criar_item_pedido` já validava qtd/obs (016). **[D]** testar via psql: `fechar_comanda(..., 21)` →
+  erro; INSERT cru com `quantidade=100` → viola constraint. → Suite 8.
+- **Realtime por tenant** (auditoria item 1, sem migration): os canais de staff (garçom/cozinha/
+  dashboard, web e app) assinam `postgres_changes` com `filter: restaurante_id=eq.<tenant>` +
+  re-validação do payload no callback — evento de outro restaurante não dispara refetch nem chime.
+  (A RLS de leitura já impedia a entrega cross-tenant desde a 016; o filtro é perf + defesa.)
 
 > ℹ️ **Inputs de dinheiro** (preço, oferta, adicional, "valor recebido") usam **máscara de moeda em
 > centavos** (`fmt.moneyMask`/`moneyParse`). A **taxa de serviço** é percentual, não usa essa máscara.

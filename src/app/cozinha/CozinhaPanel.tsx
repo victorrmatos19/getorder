@@ -120,7 +120,11 @@ export default function CozinhaPanel() {
   const alertaTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // Realtime: invalida em qualquer evento; toca alerta SÓ em INSERT (pedido novo).
+  // Canal filtrado por tenant (auditoria item 1, paridade com o app nativo) — o chime
+  // nunca toca para pedido de outro restaurante.
+  const restauranteId = restaurante?.id
   useEffect(() => {
+    if (!restauranteId) return
     const supabase = createClient()
     const agendarAlerta = () => {
       if (alertaTimer.current) clearTimeout(alertaTimer.current)
@@ -130,8 +134,12 @@ export default function CozinhaPanel() {
       .channel('cozinha-orders')
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'itens_pedido' },
+        { event: '*', schema: 'public', table: 'itens_pedido', filter: `restaurante_id=eq.${restauranteId}` },
         (payload) => {
+          const rid =
+            (payload.new as { restaurante_id?: string })?.restaurante_id ??
+            (payload.old as { restaurante_id?: string })?.restaurante_id
+          if (rid && rid !== restauranteId) return
           qc.invalidateQueries({ queryKey: ['itens', 'cozinha'] })
           if (payload.eventType === 'INSERT') agendarAlerta()
         },
@@ -145,7 +153,7 @@ export default function CozinhaPanel() {
       if (alertaTimer.current) clearTimeout(alertaTimer.current)
       supabase.removeChannel(ch)
     }
-  }, [qc])
+  }, [qc, restauranteId])
 
   // Fallback de autoplay: o primeiro toque/clique em qualquer lugar arma o áudio
   // (além do botão "Ativar som" explícito no header).

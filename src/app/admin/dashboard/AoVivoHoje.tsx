@@ -42,15 +42,26 @@ export default function AoVivoHoje({ restauranteId }: { restauranteId: string | 
 
   useEffect(() => {
     if (!restauranteId) return
+    // Canais filtrados por tenant (auditoria item 1, paridade com o app nativo).
+    const soDoTenant = (payload: { new?: unknown; old?: unknown }) => {
+      const rid =
+        (payload.new as { restaurante_id?: string })?.restaurante_id ??
+        (payload.old as { restaurante_id?: string })?.restaurante_id
+      return !rid || rid === restauranteId
+    }
     const supabase = createClient()
     const ch = supabase
       .channel('dashboard-aovivo')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'comandas' }, () => {
-        qc.invalidateQueries({ queryKey: ['dashboard-aovivo', restauranteId] })
-      })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'itens_pedido' }, () => {
-        qc.invalidateQueries({ queryKey: ['dashboard-aovivo', restauranteId] })
-      })
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'comandas', filter: `restaurante_id=eq.${restauranteId}` },
+        (p) => { if (soDoTenant(p)) qc.invalidateQueries({ queryKey: ['dashboard-aovivo', restauranteId] }) },
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'itens_pedido', filter: `restaurante_id=eq.${restauranteId}` },
+        (p) => { if (soDoTenant(p)) qc.invalidateQueries({ queryKey: ['dashboard-aovivo', restauranteId] }) },
+      )
       .subscribe()
     return () => {
       supabase.removeChannel(ch)
